@@ -5,3 +5,4 @@ pvporcupine>=1.9.0
 gTTS>=2.2.2
 playsound>=1.2.2
 PyYAML>=5.3.1
+spidev>=3.5

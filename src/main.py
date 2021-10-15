@@ -7,6 +7,7 @@ import pvporcupine
 from google.cloud import speech_v1 as speech
 
 import audio
+from pixels import Pixels
 from voiceflow import Voiceflow
 
 RATE = 16000
@@ -21,6 +22,7 @@ def load_config(config_file="config.yaml"):
 
 def main():
     config = load_config()
+    leds = Pixels()
 
     # Wakeword setup
     porcupine = pvporcupine.create(keywords=config["wakewords"])
@@ -52,12 +54,14 @@ def main():
 
             if keyword_index >= 0:
                 print("Wakeword Detected")
+                leds.wakeup()
                 audio.beep()
                 end = False
                 while not end: 
                     if vf.state_uninitialized(): 
                         # First session
                         print("Initializing first session")
+                        leds.think()
                         response = vf.init_state()
                     else:
                         stream.start_buf()  # Only start the stream buffer when we detect the wakeword
@@ -74,19 +78,22 @@ def main():
                         stream.stop_buf()
 
                         # Send request to VF service and get response
-                        response = vf.interact(utterance)
+                        leds.think()
+                        response = vf.interact(utterance)                    
                     
                     for item in response["trace"]:
                         if item["type"] == "speak":
                             payload = item["payload"]
                             message = payload["message"]
                             print("Response: " + message)
+                            leds.speak()
                             audio.play(payload["src"])
                         elif item["type"] == "end":
                             print("-----END-----")
                             vf.clear_state()
                             end = True
                             audio.beep()
+                            leds.off()
 
 if __name__ == "__main__":
     main()
