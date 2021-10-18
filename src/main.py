@@ -23,6 +23,7 @@ def load_config(config_file="config.yaml"):
 def main():
     config = load_config()
     leds = Pixels()
+    leds.wakeup()
 
     # Wakeword setup
     porcupine = pvporcupine.create(keywords=config["wakewords"])
@@ -43,6 +44,7 @@ def main():
     )
 
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
+        leds.off()
         print("Starting voice assistant!")
         while True:
             pcm = stream.get_sync_frame()
