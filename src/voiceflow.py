@@ -12,19 +12,18 @@ class MemoryStore:
     self.store = value
 
 class Voiceflow:
-  def __init__(self, apiKey, stateStore=MemoryStore):
+  def __init__(self, apiKey, versionID, stateStore=MemoryStore):
     self.apiKey = apiKey
     self.stateStore = stateStore()
     self.url = "https://general-runtime.voiceflow.com"
+    self.versionID = versionID
 
   def clear_state(self):
     self.stateStore.put(None)
 
-  def interact(self, versionID, input):
+  def interact(self, input):
     # Get state
     state = self.stateStore.get()
-    if state is None:
-      state = self.initState(versionID)
 
     # Call interactions
     body = {
@@ -45,8 +44,14 @@ class Voiceflow:
     # Return response
     return response
 
-  def initState(self, versionID):
-    initialState = requests.get(urljoin(self.url, "/interact/"+versionID+"/state"), headers={"Authorization":self.apiKey}).json()
+  def init_state(self):
+    # Get default state
+    initialState = requests.get(urljoin(self.url, "/interact/"+self.versionID+"/state"), headers={"Authorization":self.apiKey}).json()
 
-    response = requests.post(urljoin(self.url, "/interact/"+versionID), json=initialState, headers={"Authorization":self.apiKey}).json()
-    return response["state"]
+    # Begin initial session
+    response = requests.post(urljoin(self.url, "/interact/"+self.versionID), json=initialState, headers={"Authorization":self.apiKey}).json()
+
+    # Save state
+    self.stateStore.put(response["state"])
+
+    return response

@@ -27,7 +27,7 @@ def main():
     CHUNK = porcupine.frame_length  # 512 entries
 
     # Voiceflow setup
-    vf = Voiceflow(os.getenv('VF_API_KEY', "dummy_key"))
+    vf = Voiceflow(os.getenv('VF_API_KEY', "dummy_key"), config["vf_VersionID"])
 
     # Google ASR setup
     google_asr_client = speech.SpeechClient()
@@ -55,21 +55,25 @@ def main():
                 audio.beep()
                 end = False
                 while not end: 
-                    stream.start_buf()  # Only start the stream buffer when we detect the wakeword
-                    audio_generator = stream.generator()
-                    requests = (
-                        speech.StreamingRecognizeRequest(audio_content=content)
-                        for content in audio_generator
-                    )
+                    if vf.stateStore is None: 
+                        # First session
+                        response = vf.init_state()
+                    else:
+                        stream.start_buf()  # Only start the stream buffer when we detect the wakeword
+                        audio_generator = stream.generator()
+                        requests = (
+                            speech.StreamingRecognizeRequest(audio_content=content)
+                            for content in audio_generator
+                        )
 
-                    responses = google_asr_client.streaming_recognize(streaming_config, requests)
+                        responses = google_asr_client.streaming_recognize(streaming_config, requests)
 
-                    # Now, put the transcription responses to use.
-                    utterance = audio.process(responses)
-                    stream.stop_buf()
+                        # Now, put the transcription responses to use.
+                        utterance = audio.process(responses)
+                        stream.stop_buf()
 
-                    # Send request to VF service and get response
-                    response = vf.interact(config["vf_VersionID"], utterance)
+                        # Send request to VF service and get response
+                        response = vf.interact(utterance)
                     
                     for item in response["trace"]:
                         if item["type"] == "speak":
