@@ -36,7 +36,7 @@ class Voiceflow:
         "tts": "true",
       },
     }
-    response = requests.post(urljoin(self.url, "/interact/"+versionID), json=body, headers={"Authorization":self.apiKey}).json()
+    response = requests.post(urljoin(self.url, "/interact/"+self.versionID), json=body, headers={"Authorization":self.apiKey}).json()
 
     # Save state
     self.stateStore.put(response["state"])
