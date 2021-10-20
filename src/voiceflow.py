@@ -1,4 +1,5 @@
 import requests
+import uuid
 from urllib.parse import urljoin
 
 class MemoryStore:
@@ -20,11 +21,11 @@ class Voiceflow:
   def clear_state(self):
     self.stateStore.put(None)
 
-  def interact(self, diagramID, versionID, input):
+  def interact(self, versionID, input):
     # Get state
     state = self.stateStore.get()
     if state is None:
-      state = self.initState(diagramID, versionID)
+      state = self.initState(versionID)
 
     # Call interactions
     body = {
@@ -37,7 +38,7 @@ class Voiceflow:
         "tts": "true",
       },
     }
-    response = requests.post(urljoin(self.url, "/interact/"+versionID), json=body, headers={"Authorization":self.apiKey}).json()
+    response = requests.post(urljoin(self.url, "/state/"+versionID+"/user"+userID+"/interact"), json=body, headers={"Authorization":self.apiKey}).json()
 
     # Save state
     self.stateStore.put(response["state"])
@@ -45,8 +46,13 @@ class Voiceflow:
     # Return response
     return response
 
-  def initState(self, diagramID, versionID):
+  def initState(self, versionID):
+    # Generate a new user ID for each session so that different clients don't interfere with each other. 
+    # For production implementations, this should be set once per device.
+    tempUUID = str(uuid.uuid4())
+    userID = "rpi_demo_"+tempUUID[len(tempUUID)-12:]
+
     initialState = requests.get(urljoin(self.url, "/interact/"+versionID+"/state"), headers={"Authorization":self.apiKey}).json()
 
-    response = requests.post(urljoin(self.url, "/interact/"+versionID), json=initialState, headers={"Authorization":self.apiKey}).json()
+    response = requests.post(urljoin(self.url, "/state/"+versionID+"/user"+userID+"/interact"), json=initialState, headers={"Authorization":self.apiKey}).json()
     return response["state"]
