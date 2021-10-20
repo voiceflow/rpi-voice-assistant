@@ -55,7 +55,7 @@ def main():
                 audio.beep()
                 end = False
                 while not end: 
-                    if vf.stateStore is None: 
+                    if not vf.state_initialized(): 
                         # First session
                         response = vf.init_state()
                     else:

@@ -55,3 +55,6 @@ class Voiceflow:
     self.stateStore.put(response["state"])
 
     return response
+
+  def state_initialized(self):
+    return self.stateStore.store is None
