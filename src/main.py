@@ -69,7 +69,7 @@ def main():
                     stream.stop_buf()
 
                     # Send request to VF service and get response
-                    response = vf.interact(config["vf_DiagramID"], config["vf_VersionID"], utterance)
+                    response = vf.interact(config["vf_VersionID"], utterance)
                     
                     for item in response["trace"]:
                         if item["type"] == "speak":

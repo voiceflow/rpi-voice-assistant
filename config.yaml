@@ -1,6 +1,5 @@
 # Voiceflow configurations
-vf_DiagramID: "6000dcbcc668b50006399b9b"
-vf_VersionID: "6000dcbcc668b50006399b9a"
+vf_VersionID: "617088ea99f9f5001bdc3f5f"
 
 # Wakework config
 wakewords: ["computer", "jarvis"]
