@@ -12,7 +12,7 @@ The audio capture device must be capable of capturing at 16Khz.
 ### System dependencies
 This application requires the `PyAudio` package that has system dependencies: 
 ```bash
-sudo apt-get install -y python3 python3-pip python3-all-dev python3-pyaudio portaudio19-dev libsndfile1 mpg123 mplayer
+sudo apt-get install -y python3 python3-pip python3-all-dev python3-pyaudio portaudio19-dev libsndfile1 mpg321
 ```
 
 ### Python dependencies

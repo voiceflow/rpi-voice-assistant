@@ -131,7 +131,7 @@ def beep():
     wav_play(SYS_BEEP_PATH)
 
 def mp3_play(filename):
-    os.system('mplayer ' + filename + '>/dev/null 2>&1')
+    os.system('mpg321 ' + filename + '>/dev/null 2>&1')
 
 def wav_play(filename):
     os.system('aplay ' + filename + '>/dev/null 2>&1')
