@@ -51,6 +51,7 @@ class Voiceflow:
     # For production implementations, this should be set once per device.
     tempUUID = str(uuid.uuid4())
     userID = "rpi_demo_"+tempUUID[len(tempUUID)-12:]
+    print("New session user ID: " + userID)
 
     initialState = requests.get(urljoin(self.url, "/interact/"+versionID+"/state"), headers={"Authorization":self.apiKey}).json()
 
