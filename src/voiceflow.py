@@ -49,7 +49,13 @@ class Voiceflow:
     initialState = requests.get(urljoin(self.url, "/interact/"+self.versionID+"/state"), headers={"Authorization":self.apiKey}).json()
 
     # Begin initial session
-    response = requests.post(urljoin(self.url, "/interact/"+self.versionID), json=initialState, headers={"Authorization":self.apiKey}).json()
+    initialBody = {
+      "state": initialState,
+      "config": {
+        "tts": "true",
+      },
+    }
+    response = requests.post(urljoin(self.url, "/interact/"+self.versionID), json=initialBody, headers={"Authorization":self.apiKey}).json()
 
     # Save state
     self.stateStore.put(response["state"])
