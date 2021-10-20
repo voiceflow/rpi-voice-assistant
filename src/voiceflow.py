@@ -56,5 +56,5 @@ class Voiceflow:
 
     return response
 
-  def state_initialized(self):
+  def state_uninitialized(self):
     return self.stateStore.store is None

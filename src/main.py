@@ -55,8 +55,9 @@ def main():
                 audio.beep()
                 end = False
                 while not end: 
-                    if not vf.state_initialized(): 
+                    if vf.state_uninitialized(): 
                         # First session
+                        print("Initializing first session")
                         response = vf.init_state()
                     else:
                         stream.start_buf()  # Only start the stream buffer when we detect the wakeword
