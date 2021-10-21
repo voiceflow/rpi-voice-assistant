@@ -131,7 +131,10 @@ def beep():
     wav_play(SYS_BEEP_PATH)
 
 def mp3_play(filename):
-    os.system('mpg321 ' + filename + '>/dev/null 2>&1')
+    # Convert mp3 to wav
+    # HACK: this is needed since playing the audio with mpg123 directly causes clicking at the beginning and end of playback
+    os.system('mpg123 -w ' + filename+'.wav ' + filename + '>/dev/null 2>&1')
+    wav_play(filename+'.wav')
 
 def wav_play(filename):
     os.system('aplay ' + filename + '>/dev/null 2>&1')
