@@ -90,6 +90,7 @@ def main():
                             print("Response: " + message)
                             leds.speak()
                             audio.play(payload["src"])
+                            leds.off()
                         elif item["type"] == "end":
                             print("-----END-----")
                             vf.clear_state()
