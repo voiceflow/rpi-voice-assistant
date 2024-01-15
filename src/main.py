@@ -18,15 +18,14 @@ def load_config(config_file="config.yaml"):
         # scalar values to Python the dictionary format
         return yaml.load(file, Loader=yaml.FullLoader)
 
-
 def main():
     config = load_config()
 
     # Wakeword setup
-    porcupine = pvporcupine.create(keywords=config["wakewords"])
+    porcupine = pvporcupine.create(access_key=os.getenv('PVPORCUPINE_KEY', "dummy_key"), keywords=config["wakewords"])
     CHUNK = porcupine.frame_length  # 512 entries
 
-    # Voiceflow setup
+    #Voiceflow setup
     vf = Voiceflow(os.getenv('VF_API_KEY', "dummy_key"), config["vf_VersionID"])
 
     # Google ASR setup
@@ -72,6 +71,7 @@ def main():
                         # Now, put the transcription responses to use.
                         utterance = audio.process(responses)
                         stream.stop_buf()
+                        print(utterance)
 
                         # Send request to VF service and get response
                         response = vf.interact(utterance)

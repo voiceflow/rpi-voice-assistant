@@ -1,5 +1,5 @@
 # Voiceflow configurations
-vf_VersionID: "617088ea99f9f5001bdc3f5f"
+vf_VersionID: "6571f95c9530f29273bd4d6e"
 
 # Wakework config
 wakewords: ["computer", "jarvis"]

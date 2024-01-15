@@ -37,7 +37,7 @@ class Voiceflow:
       },
     }
     response = requests.post(urljoin(self.url, "/interact/"+self.versionID), json=body, headers={"Authorization":self.apiKey}).json()
-
+    print(response)
     # Save state
     self.stateStore.put(response["state"])
 
@@ -56,7 +56,7 @@ class Voiceflow:
       },
     }
     response = requests.post(urljoin(self.url, "/interact/"+self.versionID), json=initialBody, headers={"Authorization":self.apiKey}).json()
-
+    print(response)
     # Save state
     self.stateStore.put(response["state"])
 
