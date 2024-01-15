@@ -10,23 +10,41 @@ import audio
 from voiceflow import Voiceflow
 
 RATE = 16000
-language_code = "en-US"  # a BCP-47 language tag
+language_code = "de-DE"  # a BCP-47 language tag
 
 def load_config(config_file="config.yaml"):
     with open(config_file) as file:
-        # The FullLoader parameter handles the conversion from YAML
-        # scalar values to Python the dictionary format
         return yaml.load(file, Loader=yaml.FullLoader)
+
+def play_vf_response(vf_response, vf):
+    for item in vf_response:
+        if item["type"] == "speak":
+            payload = item["payload"]
+            message = payload["message"]
+            print("Response: " + message)
+            audio.play(payload["src"])
+        elif item["type"] == "end":
+            print("-----END-----")
+            vf.user_state.delete()
+            audio.beep()
+            return False 
+    return True
 
 def main():
     config = load_config()
-
+    
     # Wakeword setup
     porcupine = pvporcupine.create(access_key=os.getenv('PVPORCUPINE_KEY', "dummy_key"), keywords=config["wakewords"])
     CHUNK = porcupine.frame_length  # 512 entries
 
-    #Voiceflow setup
-    vf = Voiceflow(os.getenv('VF_API_KEY', "dummy_key"), config["vf_VersionID"])
+    #Voiceflow setup using python package from pip
+    vf = Voiceflow(
+        api_key=os.getenv('VF_API_KEY'),
+        user_id='abc123'
+    )
+
+    #Start from beginning of voice assistant
+    vf.user_state.delete()
 
     # Google ASR setup
     google_asr_client = speech.SpeechClient()
@@ -53,40 +71,29 @@ def main():
                 print("Wakeword Detected")
                 audio.beep()
                 end = False
+                vf_response = vf.interact.launch(config={'tts': True})
+                if not play_vf_response(vf_response, vf):
+                    break
+
                 while not end: 
-                    if vf.state_uninitialized(): 
-                        # First session
-                        print("Initializing first session")
-                        response = vf.init_state()
-                    else:
-                        stream.start_buf()  # Only start the stream buffer when we detect the wakeword
-                        audio_generator = stream.generator()
-                        requests = (
-                            speech.StreamingRecognizeRequest(audio_content=content)
-                            for content in audio_generator
-                        )
+                    stream.start_buf()  # Only start the stream buffer when we detect the wakeword
+                    audio_generator = stream.generator()
+                    requests = (
+                        speech.StreamingRecognizeRequest(audio_content=content)
+                        for content in audio_generator
+                    )
 
-                        responses = google_asr_client.streaming_recognize(streaming_config, requests)
+                    responses = google_asr_client.streaming_recognize(streaming_config, requests)
+                    utterance = audio.process(responses)
+                    stream.stop_buf()
+                    print(utterance)
 
-                        # Now, put the transcription responses to use.
-                        utterance = audio.process(responses)
-                        stream.stop_buf()
-                        print(utterance)
+                    # Send request to VF service and get response
+                    vf_response = vf.interact.text(user_input=utterance, config={'tts': True})
+                    if not play_vf_response(vf_response, vf):
+                        break
 
-                        # Send request to VF service and get response
-                        response = vf.interact(utterance)
-                    
-                    for item in response["trace"]:
-                        if item["type"] == "speak":
-                            payload = item["payload"]
-                            message = payload["message"]
-                            print("Response: " + message)
-                            audio.play(payload["src"])
-                        elif item["type"] == "end":
-                            print("-----END-----")
-                            vf.clear_state()
-                            end = True
-                            audio.beep()
+
 
 if __name__ == "__main__":
     main()
