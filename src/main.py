@@ -13,7 +13,7 @@ RATE = 16000
 CHUNK = 512
 language_code = "de-DE"  #BCP-47 language tag
 
-def play_vf_response(vf, vf_response):
+def handle_vf_response(vf, vf_response):
     for item in vf_response:
         if item["type"] == "speak":
             payload = item["payload"]
@@ -56,7 +56,7 @@ def main():
             end = False
 
             vf_response = vf.interact.launch(config={'tts': True})
-            end = play_vf_response(vf, vf_response)
+            end = handle_vf_response(vf, vf_response)
 
             while not end: 
                 stream.start_buf()
@@ -69,12 +69,9 @@ def main():
                 responses = google_asr_client.streaming_recognize(streaming_config, requests)
                 utterance = audio.process(responses)
                 stream.stop_buf()
-                print(utterance)
 
-                # Send request to VF service and get response
                 vf_response = vf.interact.text(user_input=utterance, config={'tts': True})
-                end = play_vf_response(vf, vf_response)
-
+                end = handle_vf_response(vf, vf_response)
 
 
 if __name__ == "__main__":
