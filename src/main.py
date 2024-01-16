@@ -4,19 +4,17 @@ import struct
 import sys
 import yaml
 import pvporcupine
-from google.cloud import speech_v1 as speech
-
 import audio
+
+from google.cloud import speech_v1 as speech
 from voiceflow import Voiceflow
+from dotenv import load_dotenv
 
+load_dotenv()
 RATE = 16000
-language_code = "de-DE"  # a BCP-47 language tag
+language_code = "de-DE"  #BCP-47 language tag
 
-def load_config(config_file="config.yaml"):
-    with open(config_file) as file:
-        return yaml.load(file, Loader=yaml.FullLoader)
-
-def play_vf_response(vf_response, vf):
+def play_vf_response(vf, vf_response):
     for item in vf_response:
         if item["type"] == "speak":
             payload = item["payload"]
@@ -31,10 +29,8 @@ def play_vf_response(vf_response, vf):
     return True
 
 def main():
-    config = load_config()
-    
     # Wakeword setup
-    porcupine = pvporcupine.create(access_key=os.getenv('PVPORCUPINE_KEY', "dummy_key"), keywords=config["wakewords"])
+    porcupine = pvporcupine.create(access_key=os.getenv('PVPORCUPINE_KEY', "dummy_key"), keywords=["computer"])
     CHUNK = porcupine.frame_length  # 512 entries
 
     #Voiceflow setup using python package from pip
@@ -72,7 +68,7 @@ def main():
                 audio.beep()
                 end = False
                 vf_response = vf.interact.launch(config={'tts': True})
-                if not play_vf_response(vf_response, vf):
+                if not play_vf_response(vf, vf_response):
                     break
 
                 while not end: 
@@ -90,7 +86,7 @@ def main():
 
                     # Send request to VF service and get response
                     vf_response = vf.interact.text(user_input=utterance, config={'tts': True})
-                    if not play_vf_response(vf_response, vf):
+                    if not play_vf_response(vf, vf_response):
                         break
 
 
