@@ -1,0 +1,3 @@
+[submodule "voiceflow-python"]
+	path = voiceflow-python
+	url = git@github.com:phoeinx/voiceflow-python.git
