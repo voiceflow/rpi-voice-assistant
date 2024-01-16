@@ -1,3 +1,0 @@
-import audio
-
-audio.beep()
