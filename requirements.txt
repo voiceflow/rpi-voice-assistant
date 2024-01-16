@@ -1,7 +1,6 @@
 google-cloud>=0.34.0
 google-cloud-speech>=2.0.1
 PyAudio>=0.2.11
-pvporcupine>=1.9.0
 gTTS>=2.2.2
 playsound>=1.2.2
-PyYAML>=5.3.1
+voiceflow>=1.0.6

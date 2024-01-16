@@ -2,8 +2,6 @@ import os
 import time
 import struct
 import sys
-import yaml
-import pvporcupine
 import audio
 
 from google.cloud import speech_v1 as speech
@@ -12,6 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 RATE = 16000
+CHUNK = 512
 language_code = "de-DE"  #BCP-47 language tag
 
 def play_vf_response(vf, vf_response):
@@ -25,13 +24,10 @@ def play_vf_response(vf, vf_response):
             print("-----END-----")
             vf.user_state.delete()
             audio.beep()
-            return False 
-    return True
+            return True 
+    return False
 
 def main():
-    # Wakeword setup
-    porcupine = pvporcupine.create(access_key=os.getenv('PVPORCUPINE_KEY', "dummy_key"), keywords=["computer"])
-    CHUNK = porcupine.frame_length  # 512 entries
 
     #Voiceflow setup using python package from pip
     vf = Voiceflow(
@@ -54,40 +50,30 @@ def main():
     )
 
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
-        print("Starting voice assistant!")
         while True:
-            pcm = stream.get_sync_frame()
-            if len(pcm) == 0:
-                # Protects against empty frames
-                continue
-            pcm = struct.unpack_from("h" * porcupine.frame_length, pcm)
-            keyword_index = porcupine.process(pcm)
+            input("Press Enter to start the voice assistant...")
+            audio.beep()
+            end = False
 
-            if keyword_index >= 0:
-                print("Wakeword Detected")
-                audio.beep()
-                end = False
-                vf_response = vf.interact.launch(config={'tts': True})
-                if not play_vf_response(vf, vf_response):
-                    break
+            vf_response = vf.interact.launch(config={'tts': True})
+            end = play_vf_response(vf, vf_response)
 
-                while not end: 
-                    stream.start_buf()  # Only start the stream buffer when we detect the wakeword
-                    audio_generator = stream.generator()
-                    requests = (
-                        speech.StreamingRecognizeRequest(audio_content=content)
-                        for content in audio_generator
-                    )
+            while not end: 
+                stream.start_buf()
+                audio_generator = stream.generator()
+                requests = (
+                    speech.StreamingRecognizeRequest(audio_content=content)
+                    for content in audio_generator
+                )
 
-                    responses = google_asr_client.streaming_recognize(streaming_config, requests)
-                    utterance = audio.process(responses)
-                    stream.stop_buf()
-                    print(utterance)
+                responses = google_asr_client.streaming_recognize(streaming_config, requests)
+                utterance = audio.process(responses)
+                stream.stop_buf()
+                print(utterance)
 
-                    # Send request to VF service and get response
-                    vf_response = vf.interact.text(user_input=utterance, config={'tts': True})
-                    if not play_vf_response(vf, vf_response):
-                        break
+                # Send request to VF service and get response
+                vf_response = vf.interact.text(user_input=utterance, config={'tts': True})
+                end = play_vf_response(vf, vf_response)
 
 
 
