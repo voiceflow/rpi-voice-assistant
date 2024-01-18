@@ -6,7 +6,7 @@ import audio
 from pathlib import Path
 
 from google.cloud import speech_v1 as speech
-from google.protobuf.duration_pb2 import Duration
+from google.protobuf import duration_pb2
 from dotenv import load_dotenv
 
 grandparent_dir = Path(__file__).parents[1]
@@ -51,8 +51,19 @@ def main():
         language_code=language_code,
     )
 
+    # speech_start_timeout = duration_pb2.Duration(seconds=10)
+    # speech_end_timeout = duration_pb2.Duration(seconds=10)
+    # voice_activity_timeout = (
+    #     speech.StreamingRecognitionConfig.VoiceActivityTimeout(
+    #         speech_start_timeout=speech_start_timeout,
+    #         speech_end_timeout=speech_end_timeout,
+    #     )
+    # )
+    #TODO: if relevant attempt to use example for v2 (and in general google tts v2 from here: )
+    #watch stackoverflow issues here: https://stackoverflow.com/questions/77828478/in-google-cloud-dotnet-voiceactivitytimeout-not-working-in-streamingrecognizereq, same as demonstrated
+
     streaming_config = speech.StreamingRecognitionConfig(
-        config=google_asr_config, interim_results=False,
+        config=google_asr_config, interim_results=False, #enable_voice_activity_events=True, voice_activity_timeout=voice_activity_timeout,
     )
 
 
