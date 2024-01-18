@@ -28,7 +28,6 @@ def handle_vf_response(vf, vf_response):
         elif item["type"] == "end":
             print("-----END-----")
             vf.user_state.delete()
-            audio.beep()
             return True 
     return False
 
@@ -70,12 +69,13 @@ def main():
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
         while True:
             input("Press Enter to start the voice assistant...")
-            audio.beep()
             end = False
             vf_response = vf.interact.launch(config={'tts': True})
             end = handle_vf_response(vf, vf_response)
-            while not end: 
+            while not end:
+                audio.beep()
                 stream.start_buf()
+
                 audio_generator = stream.generator()
                 requests = (
                     speech.StreamingRecognizeRequest(audio_content=content)
@@ -85,7 +85,7 @@ def main():
                 responses = google_asr_client.streaming_recognize(streaming_config, requests)
                 utterance = audio.process(responses)
                 stream.stop_buf()
-
+                
                 vf_response = vf.interact.text(user_input=utterance, config={'tts': True})
                 end = handle_vf_response(vf, vf_response)
 
