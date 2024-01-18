@@ -1,0 +1,3 @@
+import audio
+
+audio.beep()
