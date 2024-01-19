@@ -3,4 +3,4 @@ google-cloud-speech>=2.0.1
 PyAudio>=0.2.11
 gTTS>=2.2.2
 playsound>=1.2.2
-voiceflow>=1.0.6
+structlog>=21.1.0

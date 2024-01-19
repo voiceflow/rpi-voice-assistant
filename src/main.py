@@ -8,6 +8,13 @@ import requests
 import timeit
 import yaml
 
+import asyncio
+from collections.abc import Sequence, Iterator
+import re
+import structlog
+import signal
+
+
 from collections.abc import Iterator
 from pathlib import Path
 from dotenv import load_dotenv
@@ -43,7 +50,8 @@ def elevenlabs_stream(text: str, voice_id: str, api_key: str) -> Iterator[bytes]
 
     return chunks
 
-def playback_stream(chunks: Iterator[bytes]):
+def play_audio_stream(chunks: Iterator[bytes]):
+    """Play an audio bytestream using the mpv media player."""
     mpv_command = ["mpv", "--no-cache", "--no-terminal", "--", "fd://0"]
     mpv_proc = subprocess.Popen(
         mpv_command,
@@ -61,11 +69,76 @@ def playback_stream(chunks: Iterator[bytes]):
 
     mpv_proc.wait()
 
+
+def generate_audio(text: str, voice_id: str, api_key:str) -> Iterator[bytes]:
+    """Run speech synthesis via ElevenLabs API and return an MP3 bytestream."""
+    headers = { "xi-api-key": api_key }
+    query = { "optimize_streaming_latency": "4" }
+
+    payload = {
+        "model_id": "eleven_multilingual_v2",
+        "output_format": "mp3_22050_32",
+        "text": text,
+    }
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+
+    log.debug(f"Generating audio", text=text)
+    start = timeit.default_timer()
+    response = requests.post(url, json=payload, headers=headers, params=query)
+    end = timeit.default_timer()
+    log.debug(f"Successfully generated audio", took=round(end - start, 2), text=text)
+    chunks = response.iter_content(chunk_size=2048)
+
+    return chunks
+
+def generate_audio_parallel(segments: Sequence[str], voice_id: str, api_key:str) -> Iterator[bytes]:
+    """Run speech synthesis for the given list of text segments in parallel and return an MP3 bytestream.
+    The MP3 bytestream contains synthesiszed audio matching the order of the input text segments."""
+    loop = asyncio.get_event_loop()
+
+    futures = [
+        loop.run_in_executor(None, generate_audio, segment, voice_id, api_key)
+        for segment in segments
+    ]
+
+    before_first_audio = timeit.default_timer()
+
+    for i, future in enumerate(futures):
+        # Gracefully stop asyncio task when receiving system signals
+        loop.add_signal_handler(signal.SIGINT, future.cancel)
+        loop.add_signal_handler(signal.SIGTERM, future.cancel)
+
+        # Wait for HTTP request to complete
+        chunks = loop.run_until_complete(future)
+
+        if i == 0:
+            after_first_audio = timeit.default_timer()
+            log.debug("Time to first audio", took=round(after_first_audio - before_first_audio, 2))
+
+        yield from chunks
+
+def split_text(text: str) -> list[str]:
+    """Split text into multiple text segments that can be synthesized to audio separately."""
+    sentences = []
+    pattern = r"[\.?!]+"
+
+    previous_end = 0
+
+    for match in re.finditer(pattern, text):
+        sentence = text[previous_end:match.end()]
+        sentences.append(sentence.strip())
+        previous_end = match.end()
+
+    return sentences
+
 def play_elevenlabs_audio(response_text: str):
     voice_id = CONFIG["elevenlabs_voice_id"]
     api_key = os.getenv('EL_API_KEY', "dummy_key")
-    stream = elevenlabs_stream(text=response_text, voice_id=voice_id, api_key=api_key)
-    playback_stream(stream)
+
+    segments = split_text(response_text)
+    stream = generate_audio_parallel(segments=segments, voice_id=voice_id, api_key=api_key)
+    play_audio_stream(stream)
 
 def handle_vf_response(vf: Voiceflow, vf_response: JSON):
     for item in vf_response:
@@ -89,6 +162,9 @@ RATE = 16000
 CHUNK = 128
 language_code = "de-DE"  #BCP-47 language tag
 CONFIG = load_config()
+
+log = structlog.get_logger(__name__)
+
 
 def main():
     #Voiceflow setup using python package from pip
