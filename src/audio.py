@@ -4,7 +4,8 @@ import queue
 import base64
 import os
 
-SYS_BEEP_PATH = os.path.join(os.getcwd(),"assets/beepbeep.wav")
+SYS_BEEP_BEEP_PATH = os.path.join(os.getcwd(),"assets/beepbeep.wav")
+SYS_BEEP_PATH = os.path.join(os.getcwd(),"assets/beep.wav")
 
 class MicrophoneStream(object):
     """Opens a recording stream as a generator yielding the audio chunks."""
@@ -129,6 +130,9 @@ def speak(text):
 
 def beep():
     wav_play(SYS_BEEP_PATH)
+
+def beepbeep():
+    wav_play(SYS_BEEP_BEEP_PATH)
 
 def mp3_play(filename):
     # Convert mp3 to wav
