@@ -13,6 +13,7 @@ from collections.abc import Sequence, Iterator
 import re
 import structlog
 import signal
+import uuid
 
 
 from collections.abc import Iterator
@@ -170,7 +171,7 @@ def main():
     #Voiceflow setup using python package from pip
     vf = Voiceflow(
         api_key=os.getenv('VF_API_KEY', "dummy_key"),
-        user_id='abc123'
+        user_id=uuid.uuid4()
     )
 
     #Start from beginning of voice assistant
@@ -201,6 +202,7 @@ def main():
 
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
         while True:
+            vf.user_id = uuid.uuid4()
             input("Press Enter to start the voice assistant...")
             end = False
             vf_response = vf.interact.launch()
