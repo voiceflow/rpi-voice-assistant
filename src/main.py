@@ -3,39 +3,99 @@ import time
 import struct
 import sys
 import audio
+import subprocess
+import requests
+import timeit
+import yaml
+
+from collections.abc import Iterator
 from pathlib import Path
+from dotenv import load_dotenv
+
+from typing import Dict, Any
+JSON = Dict[str, Any]
 
 from google.cloud import speech_v1 as speech
 from google.protobuf import duration_pb2
-from dotenv import load_dotenv
 
 grandparent_dir = Path(__file__).parents[1]
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), grandparent_dir)))
 from voiceflow_python.src.voiceflow import Voiceflow
 
-load_dotenv()
-RATE = 16000
-CHUNK = 128
-language_code = "de-DE"  #BCP-47 language tag
+def load_config(config_file="config.yaml"):
+    with open(config_file) as file:
+        # The FullLoader parameter handles the conversion from YAML
+        # scalar values to Python the dictionary format
+        return yaml.load(file, Loader=yaml.FullLoader)
 
-def handle_vf_response(vf, vf_response):
+def elevenlabs_stream(text: str, voice_id: str, api_key: str) -> Iterator[bytes]:
+    headers = { "xi-api-key": api_key }
+    query = { "optimize_streaming_latency": "4" }
+
+    payload = {
+        "model_id": "eleven_multilingual_v2",
+        "output_format": "mp3_22050_32",
+        "text": text,
+    }
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+
+    response = requests.post(url, json=payload, headers=headers, params=query)
+    chunks = response.iter_content(chunk_size=2048)
+
+    return chunks
+
+def playback_stream(chunks: Iterator[bytes]):
+    mpv_command = ["mpv", "--no-cache", "--no-terminal", "--", "fd://0"]
+    mpv_proc = subprocess.Popen(
+        mpv_command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    for chunk in chunks:
+        mpv_proc.stdin.write(chunk)
+        mpv_proc.stdin.flush()
+
+    if mpv_proc.stdin:
+        mpv_proc.stdin.close()
+
+    mpv_proc.wait()
+
+def play_elevenlabs_audio(response_text: str):
+    voice_id = CONFIG["elevenlabs_voice_id"]
+    api_key = os.getenv('EL_API_KEY', "dummy_key")
+    stream = elevenlabs_stream(text=response_text, voice_id=voice_id, api_key=api_key)
+    playback_stream(stream)
+
+def handle_vf_response(vf: Voiceflow, vf_response: JSON):
     for item in vf_response:
         if item["type"] == "speak":
             payload = item["payload"]
             message = payload["message"]
             print("Response: " + message)
-            audio.play(payload["src"])
+            if "src" in payload:
+                audio.play(payload["src"])
+            else:
+                play_elevenlabs_audio(message)
         elif item["type"] == "end":
             print("-----END-----")
             vf.user_state.delete()
             return True 
     return False
 
-def main():
+# Setup
+load_dotenv()
+RATE = 16000
+CHUNK = 128
+language_code = "de-DE"  #BCP-47 language tag
+CONFIG = load_config()
 
+def main():
     #Voiceflow setup using python package from pip
     vf = Voiceflow(
-        api_key=os.getenv('VF_API_KEY'),
+        api_key=os.getenv('VF_API_KEY', "dummy_key"),
         user_id='abc123'
     )
 
@@ -65,12 +125,11 @@ def main():
         config=google_asr_config, interim_results=False, #enable_voice_activity_events=True, voice_activity_timeout=voice_activity_timeout,
     )
 
-
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
         while True:
             input("Press Enter to start the voice assistant...")
             end = False
-            vf_response = vf.interact.launch(config={'tts': True})
+            vf_response = vf.interact.launch()
             end = handle_vf_response(vf, vf_response)
             while not end:
                 audio.beep()
@@ -86,7 +145,7 @@ def main():
                 utterance = audio.process(responses)
                 stream.stop_buf()
                 
-                vf_response = vf.interact.text(user_input=utterance, config={'tts': True})
+                vf_response = vf.interact.text(user_input=utterance)
                 end = handle_vf_response(vf, vf_response)
 
 if __name__ == "__main__":
