@@ -18,9 +18,7 @@ JSON = Dict[str, Any]
 from google.cloud import speech_v1 as speech
 from google.protobuf import duration_pb2
 
-grandparent_dir = Path(__file__).parents[1]
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), grandparent_dir)))
-from voiceflow_python.src.voiceflow import Voiceflow
+from voiceflow import Voiceflow
 
 def load_config(config_file="config.yaml"):
     with open(config_file) as file:
