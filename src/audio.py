@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+import subprocess
 from gtts import gTTS
 import pyaudio
 import queue
@@ -119,26 +121,45 @@ def play(encoding_str):
     decode_bytes = base64.b64decode(encoding_str.split("data:audio/mpeg;base64,",1)[1])
     with open(filename, "wb") as wav_file:
         wav_file.write(decode_bytes)
-    mp3_play(filename)
+    play_mp3(filename)
+
+def play_audio_stream(chunks: Iterator[bytes]):
+    """Play an audio bytestream using the mpv media player."""
+    mpv_command = ["mpv", "--no-cache", "--no-terminal", "--", "fd://0"]
+    mpv_proc = subprocess.Popen(
+        mpv_command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    for chunk in chunks:
+        mpv_proc.stdin.write(chunk)
+        mpv_proc.stdin.flush()
+
+    if mpv_proc.stdin:
+        mpv_proc.stdin.close()
+
+    mpv_proc.wait()
+
+def play_mp3(filename):
+    # Convert mp3 to wav
+    # HACK: this is needed since playing the audio with mpg123 directly causes clicking at the beginning and end of playback
+    os.system('mpg123 -w ' + filename+'.wav ' + filename + '>/dev/null 2>&1')
+    play_wav(filename+'.wav')
+
+def play_wav(filename):
+    os.system('aplay ' + filename + '>/dev/null 2>&1')
 
 # Text-to-speech using Google TTS
 def speak(text):
     tts = gTTS(text=text, lang='en')
     filename = '/tmp/tts.mp3'
     tts.save(filename)
-    mp3_play(filename)
+    play_mp3(filename)
 
 def beep():
-    wav_play(SYS_BEEP_PATH)
+    play_wav(SYS_BEEP_PATH)
 
 def beepbeep():
-    wav_play(SYS_BEEP_BEEP_PATH)
-
-def mp3_play(filename):
-    # Convert mp3 to wav
-    # HACK: this is needed since playing the audio with mpg123 directly causes clicking at the beginning and end of playback
-    os.system('mpg123 -w ' + filename+'.wav ' + filename + '>/dev/null 2>&1')
-    wav_play(filename+'.wav')
-
-def wav_play(filename):
-    os.system('aplay ' + filename + '>/dev/null 2>&1')
+    play_wav(SYS_BEEP_BEEP_PATH)

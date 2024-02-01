@@ -1,7 +1,4 @@
 import os
-import time
-import struct
-import sys
 import audio
 import hashlib
 import pathlib
@@ -67,26 +64,6 @@ def load_config(config_file="config.yaml"):
         # The FullLoader parameter handles the conversion from YAML
         # scalar values to Python the dictionary format
         return yaml.load(file, Loader=yaml.FullLoader)
-
-
-def play_audio_stream(chunks: Iterator[bytes]):
-    """Play an audio bytestream using the mpv media player."""
-    mpv_command = ["mpv", "--no-cache", "--no-terminal", "--", "fd://0"]
-    mpv_proc = subprocess.Popen(
-        mpv_command,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    for chunk in chunks:
-        mpv_proc.stdin.write(chunk)
-        mpv_proc.stdin.flush()
-
-    if mpv_proc.stdin:
-        mpv_proc.stdin.close()
-
-    mpv_proc.wait()
 
 def _sync_wait_for_future(loop: asyncio.AbstractEventLoop, future: asyncio.Future):
     # Gracefully stop asyncio task when receiving system signals
@@ -183,10 +160,9 @@ def split_text(text: str) -> list[str]:
 
 def play_elevenlabs_audio(response_text: str, cache: Cache):
     voice_id = CONFIG["elevenlabs_voice_id"]
-
     segments = split_text(response_text)
     stream = generate_audio_parallel(segments=segments, voice_id=voice_id, cache=cache)
-    play_audio_stream(stream)
+    audio.play_audio_stream(stream)
 
 def handle_vf_response(vf: Voiceflow, vf_response: JSON, cache: Cache):
     for item in vf_response:
