@@ -13,6 +13,10 @@ log = structlog.get_logger(__name__)
 class Cache:
     def __init__(self, cache_dir: Path):
         self.dir = cache_dir
+        # The default directory currently uses a directory relative to the current working
+        # directory to cache audio files.
+        # Might make sense to use a temporary directory to ensure the cache is cleaned up
+        # after the application is terminated.
         self.dir.mkdir(parents=True, exist_ok=True)
         log.debug("Initializing file system cache", path=str(self.dir))
 
@@ -49,8 +53,6 @@ class ElevenLabs:
         self.voice_id = voice_id
         self.cache = Cache(cache_dir)
 
-        print(self.__dict__)
-
     def generate_audio_stream(self, text: str) -> Iterator[bytes]:
         segments = self.split_text(text)
         return self.generate_audio_parallel(segments=segments)
@@ -79,7 +81,6 @@ class ElevenLabs:
         return chunks
     
     def generate_audio(self, text: str) -> Iterator[bytes]:
-        print(self.__dict__)
         cache_key = (text, self.voice_id)
 
         if self.cache:
