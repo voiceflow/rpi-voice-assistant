@@ -1,33 +1,17 @@
 import os
-import audio
-import hashlib
-import pathlib
-import subprocess
-import requests
-import timeit
+import structlog
+import uuid
 import yaml
 
-import asyncio
-from collections.abc import Sequence, Iterator
-import re
-import structlog
-import signal
-import uuid
-
-from elevenlabs import ElevenLabs
-
-
-from collections.abc import Iterator
-from pathlib import Path
 from dotenv import load_dotenv
+from google.cloud import speech_v1 as speech
+
+import audio
+from voiceflow import Voiceflow
+from elevenlabs import ElevenLabs
 
 from typing import Dict, Any
 JSON = Dict[str, Any]
-
-from google.cloud import speech_v1 as speech
-from google.protobuf import duration_pb2
-
-from voiceflow import Voiceflow
 
 def load_config(config_file="config.yaml"):
     with open(config_file) as file:
