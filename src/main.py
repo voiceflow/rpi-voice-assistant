@@ -70,14 +70,18 @@ def main():
         # Each loop iteration represents one interaction of one user with the voice assistant
         while True:
             voiceflow_client.user_id = uuid.uuid4()
+            log.debug("Starting voice assistant", voiceflow_user_id=voiceflow_client.user_id)
             input("Press Enter to start the voice assistant...")
 
             end = False
+            log.debug("Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
             vf_response = voiceflow_client.interact.launch()
+            log.debug("Got voiceflow response.", voiceflow_user_id=voiceflow_client.user_id)
             end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client)
 
             while not end:
                 audio.beep()
+                log.debug("Start listening.")
                 stream.start_buf()
 
                 audio_generator = stream.generator()
@@ -88,7 +92,9 @@ def main():
 
                 responses = google_asr_client.streaming_recognize(google_streaming_config, requests)
                 utterance = audio.process(responses)
+                log.debug("Recognized utterance", utterance=utterance)
                 stream.stop_buf()
+                log.debug("Stop listening.")
                 
                 vf_response = voiceflow_client.interact.text(user_input=utterance)
                 end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client)
