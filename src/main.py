@@ -89,17 +89,6 @@ def main():
     # after the application is terminated.
     elevenlabs_client = ElevenLabs(api_key=os.getenv('EL_API_KEY', "dummy_key"), voice_id=CONFIG["elevenlabs_voice_id"])
 
-    # speech_start_timeout = duration_pb2.Duration(seconds=10)
-    # speech_end_timeout = duration_pb2.Duration(seconds=10)
-    # voice_activity_timeout = (
-    #     speech.StreamingRecognitionConfig.VoiceActivityTimeout(
-    #         speech_start_timeout=speech_start_timeout,
-    #         speech_end_timeout=speech_end_timeout,
-    #     )
-    # )
-    #TODO: if relevant attempt to use example for v2 (and in general google tts v2 from here: )
-    #watch stackoverflow issues here: https://stackoverflow.com/questions/77828478/in-google-cloud-dotnet-voiceactivitytimeout-not-working-in-streamingrecognizereq, same as demonstrated
-
     streaming_config = speech.StreamingRecognitionConfig(
         config=google_asr_config, interim_results=False, #enable_voice_activity_events=True, voice_activity_timeout=voice_activity_timeout,
     )
