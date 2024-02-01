@@ -1,7 +1,6 @@
 import os
 import structlog
 import uuid
-import yaml
 
 from dotenv import load_dotenv
 from google.cloud import speech_v1 as speech
@@ -12,12 +11,6 @@ from elevenlabs import ElevenLabs
 
 from typing import Dict, Any
 JSON = Dict[str, Any]
-
-def load_config(config_file="config.yaml"):
-    with open(config_file) as file:
-        # The FullLoader parameter handles the conversion from YAML
-        # scalar values to Python the dictionary format
-        return yaml.load(file, Loader=yaml.FullLoader)
 
 def play_elevenlabs_audio(response_text: str, el: ElevenLabs):
     stream = el.generate_audio_stream(response_text)
@@ -41,14 +34,11 @@ def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs):
 
 # Setup
 load_dotenv()
-ELEVENLABS_API_KEY = os.getenv('EL_API_KEY', "dummy_key")
 RATE = 16000
 CHUNK = 128
 language_code = "de-DE"  #BCP-47 language tag
-CONFIG = load_config()
 
 log = structlog.get_logger(__name__)
-
 
 def main():
     #Voiceflow setup using python package from pip
@@ -71,10 +61,12 @@ def main():
     # Use a directory relative to the current working directory to cache audio files.
     # Might make sense to use a temporary directory to ensure the cache is cleaned up
     # after the application is terminated.
-    elevenlabs_client = ElevenLabs(api_key=os.getenv('EL_API_KEY', "dummy_key"), voice_id=CONFIG["elevenlabs_voice_id"])
+    elevenlabs_client = ElevenLabs(
+            api_key=os.getenv('EL_API_KEY', "dummy_key"), 
+            voice_id=os.getenv('EL_VOICE_ID', "dummy_key"))
 
     streaming_config = speech.StreamingRecognitionConfig(
-        config=google_asr_config, interim_results=False, #enable_voice_activity_events=True, voice_activity_timeout=voice_activity_timeout,
+        config=google_asr_config, interim_results=False
     )
 
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
