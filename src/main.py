@@ -38,8 +38,8 @@ def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_p
                 audio_player.play_audio_stream(stream)
 
         elif item["type"] == "end":
-            log.debug("[Voiceflow]: Got end of interaction.",
-                      "[Voice Assistant]: =========END OF INTERACTION=========")
+            log.debug("[Voiceflow]: Got end of interaction.")
+            log.debug("[Voice Assistant]: =========END OF INTERACTION=========")
             vf.user_state.delete()
             return True 
     return False
