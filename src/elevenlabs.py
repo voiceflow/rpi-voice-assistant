@@ -138,6 +138,8 @@ class ElevenLabs:
             sentences.append(sentence.strip())
             previous_end = match.end()
 
+        if not sentences:
+            sentences.append(text)
         return sentences
     
     def _sync_wait_for_future(self, loop: asyncio.AbstractEventLoop, future: asyncio.Future):
