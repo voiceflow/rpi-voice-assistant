@@ -8,6 +8,7 @@ import os
 
 SYS_BEEP_BEEP_PATH = os.path.join(os.getcwd(),"assets/beepbeep.wav")
 SYS_BEEP_PATH = os.path.join(os.getcwd(),"assets/beep.wav")
+SYS_TYPING_PATH = os.path.join(os.getcwd(), "assets/keyboard_typing.wav")
 
 class MicrophoneStream(object):
     """Opens a recording stream as a generator yielding the audio chunks."""
@@ -94,6 +95,82 @@ class MicrophoneStream(object):
 
             yield b"".join(data)
 
+class AudioPlayer():
+    """
+        Audio player for playing different formats of audio as subprocesses.
+        Tracks the current audio process to stop it if needed (e.g. when playing a new audio or the program exits).
+    """
+    def __init__(self):
+        self.audio_process = None
+
+    def __del__(self):
+        print("Stopping AudioPlayer.")
+        self.stop()
+
+    def stop(self):
+        if self.audio_process:
+            self.audio_process.terminate()
+            self.audio_process = None
+
+    # Play audio/mpeg MIME content
+    def play(self, encoding_str):
+        filename = '/tmp/response.mp3'
+        decode_bytes = base64.b64decode(encoding_str.split("data:audio/mpeg;base64,",1)[1])
+        with open(filename, "wb") as wav_file:
+            wav_file.write(decode_bytes)
+        self.play_mp3(filename)
+
+    def play_audio_stream(self, chunks: Iterator[bytes]):
+        """Play an audio bytestream using the mpv media player."""
+        mpv_command = ["mpv", "--no-cache", "--no-terminal", "--", "fd://0"]
+        mpv_proc = subprocess.Popen(
+            mpv_command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Create first audio chunk from generator before stopping current audio.
+        first_chunk = next(chunks)
+        self.stop()
+        self.audio_process = mpv_proc
+        mpv_proc.stdin.write(first_chunk)
+        mpv_proc.stdin.flush()
+
+        for chunk in chunks:
+            mpv_proc.stdin.write(chunk)
+            mpv_proc.stdin.flush()
+
+        if mpv_proc.stdin:
+            mpv_proc.stdin.close()
+
+        mpv_proc.wait()
+
+    def play_mp3(self, filename):
+        # Convert mp3 to wav
+        # HACK: this is needed since playing the audio with mpg123 directly causes clicking at the beginning and end of playback
+        subprocess.run(["mpg123", "-w", f"{filename}.wav", filename], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.play_wav(filename+'.wav')
+
+    def play_wav(self, filename):
+        self.stop()
+        self.audio_process = subprocess.Popen(["aplay", filename], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Text-to-speech using Google TTS
+    def speak(self, text):
+        tts = gTTS(text=text, lang='en')
+        filename = '/tmp/tts.mp3'
+        tts.save(filename)
+        self.play_mp3(filename)
+
+    def beep(self):
+        self.play_wav(SYS_BEEP_PATH)
+
+    def beepbeep(self):
+        self.play_wav(SYS_BEEP_BEEP_PATH)
+
+    def async_waiting_tone(self):
+        self.play_wav(SYS_TYPING_PATH)
 
 # Process response from Google ASR
 def process(responses):
@@ -114,52 +191,3 @@ def process(responses):
         if result.is_final:
             print("Utterance: " + transcript)
             return transcript
-
-# Play audio/mpeg MIME content
-def play(encoding_str):
-    filename = '/tmp/response.mp3'
-    decode_bytes = base64.b64decode(encoding_str.split("data:audio/mpeg;base64,",1)[1])
-    with open(filename, "wb") as wav_file:
-        wav_file.write(decode_bytes)
-    play_mp3(filename)
-
-def play_audio_stream(chunks: Iterator[bytes]):
-    """Play an audio bytestream using the mpv media player."""
-    mpv_command = ["mpv", "--no-cache", "--no-terminal", "--", "fd://0"]
-    mpv_proc = subprocess.Popen(
-        mpv_command,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    for chunk in chunks:
-        mpv_proc.stdin.write(chunk)
-        mpv_proc.stdin.flush()
-
-    if mpv_proc.stdin:
-        mpv_proc.stdin.close()
-
-    mpv_proc.wait()
-
-def play_mp3(filename):
-    # Convert mp3 to wav
-    # HACK: this is needed since playing the audio with mpg123 directly causes clicking at the beginning and end of playback
-    os.system('mpg123 -w ' + filename+'.wav ' + filename + '>/dev/null 2>&1')
-    play_wav(filename+'.wav')
-
-def play_wav(filename):
-    os.system('aplay ' + filename + '>/dev/null 2>&1')
-
-# Text-to-speech using Google TTS
-def speak(text):
-    tts = gTTS(text=text, lang='en')
-    filename = '/tmp/tts.mp3'
-    tts.save(filename)
-    play_mp3(filename)
-
-def beep():
-    play_wav(SYS_BEEP_PATH)
-
-def beepbeep():
-    play_wav(SYS_BEEP_BEEP_PATH)

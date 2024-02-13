@@ -12,7 +12,7 @@ from elevenlabs import ElevenLabs
 from typing import Dict, Any
 JSON = Dict[str, Any]
     
-def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs):
+def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_player: audio.AudioPlayer):
     for item in vf_response:
         if item["type"] == "speak":
 
@@ -21,11 +21,11 @@ def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs):
             print("Response: " + message)
 
             if "src" in payload:
-                #play voiceflow generated audio
-                audio.play(payload["src"])
+                #play voiceflow generated audio, for using voiceflow set config={"tts" : True} in the interact calls
+                audio_player.play(payload["src"])
             else:
                 stream = el.generate_audio_stream(message)
-                audio.play_audio_stream(stream)
+                audio_player.play_audio_stream(stream)
 
         elif item["type"] == "end":
             print("-----END-----")
@@ -66,6 +66,8 @@ def main():
             api_key=os.getenv('EL_API_KEY', "dummy_key"), 
             voice_id=os.getenv('EL_VOICE_ID', "dummy_key"))
 
+    audio_player = audio.AudioPlayer()
+
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
         # Each loop iteration represents one interaction of one user with the voice assistant
         while True:
@@ -74,13 +76,16 @@ def main():
             input("Press Enter to start the voice assistant...")
 
             end = False
+            audio_player.async_waiting_tone() #signal processing to user
+
             log.debug("Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
             vf_response = voiceflow_client.interact.launch()
+
             log.debug("Got voiceflow response.", voiceflow_user_id=voiceflow_client.user_id)
-            end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client)
+            end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player)
 
             while not end:
-                audio.beep()
+                audio_player.beep() #signal start of listening to user
                 log.debug("Start listening.")
                 stream.start_buf()
 
@@ -96,8 +101,9 @@ def main():
                 stream.stop_buf()
                 log.debug("Stop listening.")
                 
+                audio_player.async_waiting_tone() #signal processing to user
                 vf_response = voiceflow_client.interact.text(user_input=utterance)
-                end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client)
+                end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player)
 
 if __name__ == "__main__":
     main()
