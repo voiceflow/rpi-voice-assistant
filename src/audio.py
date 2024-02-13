@@ -5,10 +5,13 @@ import pyaudio
 import queue
 import base64
 import os
+import structlog
 
 SYS_BEEP_BEEP_PATH = os.path.join(os.getcwd(),"assets/beepbeep.wav")
 SYS_BEEP_PATH = os.path.join(os.getcwd(),"assets/beep.wav")
 SYS_TYPING_PATH = os.path.join(os.getcwd(), "assets/keyboard_typing.wav")
+
+log = structlog.get_logger(__name__)
 
 class MicrophoneStream(object):
     """Opens a recording stream as a generator yielding the audio chunks."""
@@ -104,7 +107,7 @@ class AudioPlayer():
         self.audio_process = None
 
     def __del__(self):
-        print("Stopping AudioPlayer.")
+        log.debug("[Audio]: Stopping AudioPlayer.")
         self.stop()
 
     def stop(self):
@@ -189,5 +192,5 @@ def process(responses):
         transcript = result.alternatives[0].transcript
 
         if result.is_final:
-            print("Utterance: " + transcript)
+            log.debug("[Google ASR]: Got Utterance", transcript=transcript)
             return transcript

@@ -18,7 +18,7 @@ class Cache:
         # Might make sense to use a temporary directory to ensure the cache is cleaned up
         # after the application is terminated.
         self.dir.mkdir(parents=True, exist_ok=True)
-        log.debug("Initializing file system cache", path=str(self.dir))
+        log.debug("[Elevenlabs]: Initializing file system cache", path=str(self.dir))
 
     def set(self, key: Sequence[str], data: bytes):
         file = self.get_file(key)
@@ -28,10 +28,10 @@ class Cache:
         file = self.get_file(key)
 
         if not file.is_file():
-            log.debug("Cache miss", key=self.get_hash(key))
+            log.debug("[Elevenlabs]: Cache miss", key=self.get_hash(key))
             return None
 
-        log.debug("Cache hit", key=self.get_hash(key))
+        log.debug("[Elevenlabs]: Cache hit", key=self.get_hash(key))
         return file.read_bytes()
 
     def get_file(self, key: Sequence[str]):
@@ -70,11 +70,11 @@ class ElevenLabs:
 
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}/stream"
 
-        log.debug(f"Generating audio", text=text)
+        log.debug(f"[Elevenlabs]: Generating audio", text=text)
         start = timeit.default_timer()
         response = requests.post(url, json=payload, headers=headers, params=query)
         end = timeit.default_timer()
-        log.debug(f"Successfully generated audio", took=round(end - start, 2), text=text)
+        log.debug(f"[Elevenlabs]: Successfully generated audio", took=round(end - start, 2), text=text)
 
         chunks = response.iter_content(chunk_size=2048)
 
@@ -120,7 +120,7 @@ class ElevenLabs:
         chunks = self._sync_wait_for_future(loop, first_future)
         yield from chunks
         after_first_audio = timeit.default_timer()
-        log.debug("Time to first audio", took=round(after_first_audio - before_first_audio, 2))
+        log.debug("[Elevenlabs]: Time to first audio", took=round(after_first_audio - before_first_audio, 2))
 
         for future in futures:
             chunks = self._sync_wait_for_future(loop, future)

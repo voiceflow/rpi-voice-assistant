@@ -11,27 +11,6 @@ from elevenlabs import ElevenLabs
 
 from typing import Dict, Any
 JSON = Dict[str, Any]
-    
-def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_player: audio.AudioPlayer):
-    for item in vf_response:
-        if item["type"] == "speak":
-
-            payload = item["payload"]
-            message = payload["message"]
-            print("Response: " + message)
-
-            if "src" in payload:
-                #play voiceflow generated audio, for using voiceflow set config={"tts" : True} in the interact calls
-                audio_player.play(payload["src"])
-            else:
-                stream = el.generate_audio_stream(message)
-                audio_player.play_audio_stream(stream)
-
-        elif item["type"] == "end":
-            print("-----END-----")
-            vf.user_state.delete()
-            return True 
-    return False
 
 # Setup
 load_dotenv()
@@ -42,6 +21,28 @@ CHUNK = 128
 language_code = "de-DE"  #BCP-47 language tag
 
 log = structlog.get_logger(__name__)
+
+def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_player: audio.AudioPlayer):
+    for item in vf_response:
+        if item["type"] == "speak":
+
+            payload = item["payload"]
+            message = payload["message"]
+            log.debug("Voiceflow: Got response", response=message)
+
+            if "src" in payload:
+                #play voiceflow generated audio, for using voiceflow set config={"tts" : True} in the interact calls
+                audio_player.play(payload["src"])
+            else:
+                stream = el.generate_audio_stream(message)
+                audio_player.play_audio_stream(stream)
+
+        elif item["type"] == "end":
+            log.debug("[Voiceflow]: Got end of interaction.",
+                      "[Voice Assistant]: =========END OF INTERACTION=========")
+            vf.user_state.delete()
+            return True 
+    return False
 
 def main():
 
@@ -72,21 +73,19 @@ def main():
         # Each loop iteration represents one interaction of one user with the voice assistant
         while True:
             voiceflow_client.user_id = uuid.uuid4()
-            log.debug("Starting voice assistant", voiceflow_user_id=voiceflow_client.user_id)
+            log.debug("[Voice Assistant]: Starting voice assistant", voiceflow_user_id=voiceflow_client.user_id)
             input("Press Enter to start the voice assistant...")
 
             end = False
             audio_player.async_waiting_tone() #signal processing to user
 
-            log.debug("Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
+            log.debug("[Voiceflow]: Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
             vf_response = voiceflow_client.interact.launch()
-
-            log.debug("Got voiceflow response.", voiceflow_user_id=voiceflow_client.user_id)
             end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player)
 
             while not end:
                 audio_player.beep() #signal start of listening to user
-                log.debug("Start listening.")
+                log.debug("[Voice Assistant]: Start listening.")
                 stream.start_buf()
 
                 audio_generator = stream.generator()
@@ -97,9 +96,10 @@ def main():
 
                 responses = google_asr_client.streaming_recognize(google_streaming_config, requests)
                 utterance = audio.process(responses)
-                log.debug("Recognized utterance", utterance=utterance)
+                
+                log.debug("[Google ASR]: Recognized utterance", utterance=utterance)
                 stream.stop_buf()
-                log.debug("Stop listening.")
+                log.debug("[Voice Assistant]: Stop listening.")
                 
                 audio_player.async_waiting_tone() #signal processing to user
                 vf_response = voiceflow_client.interact.text(user_input=utterance)
