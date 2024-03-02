@@ -1,0 +1,10 @@
+version: "3.7"
+
+services:
+  dev:
+    image: "dialogbank"
+    build:
+      context: "."
+    volumes:
+      - ".:/root/src"
+    tty: true

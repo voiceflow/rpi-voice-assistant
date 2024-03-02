@@ -5,9 +5,9 @@ import uuid
 from dotenv import load_dotenv
 from google.cloud import speech_v1 as speech
 
-import audio
-from voiceflow import Voiceflow
-from elevenlabs import ElevenLabs
+from . import audio
+from .voiceflow import Voiceflow
+from .elevenlabs import ElevenLabs
 
 from typing import Dict, Any
 JSON = Dict[str, Any]

@@ -1,0 +1,10 @@
+[Unit]
+Description=Dialogbank
+
+[Service]
+ExecStart=/usr/share/python/bin/dbank
+Type=simple
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
