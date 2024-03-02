@@ -7,9 +7,9 @@ import base64
 import os
 import structlog
 
-SYS_BEEP_BEEP_PATH = os.path.join(os.getcwd(),"assets/beepbeep.wav")
-SYS_BEEP_PATH = os.path.join(os.getcwd(),"assets/beep.wav")
-SYS_TYPING_PATH = os.path.join(os.getcwd(), "assets/keyboard_typing.wav")
+SYS_BEEP_BEEP_PATH = os.path.join(os.path.dirname(__file__),"assets/beepbeep.wav")
+SYS_BEEP_PATH = os.path.join(os.path.dirname(__file__),"assets/beep.wav")
+SYS_TYPING_PATH = os.path.join(os.path.dirname(__file__), "assets/keyboard_typing.wav")
 
 log = structlog.get_logger(__name__)
 
