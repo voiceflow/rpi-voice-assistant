@@ -8,14 +8,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           tags: dialogbank
-          platforms: linux/arm64
+          platforms: linux/arm/v8
 
       - name: Build Debian Package
         run: docker compose run dev make
