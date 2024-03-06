@@ -2,7 +2,6 @@ import asyncio
 from pathlib import Path
 import hashlib
 import re
-import signal
 import timeit
 import requests
 import structlog
@@ -144,8 +143,8 @@ class ElevenLabs:
     
     def _sync_wait_for_future(self, loop: asyncio.AbstractEventLoop, future: asyncio.Future):
         # Gracefully stop asyncio task when receiving system signals
-        loop.add_signal_handler(signal.SIGINT, future.cancel)
-        loop.add_signal_handler(signal.SIGTERM, future.cancel)
+        #loop.add_signal_handler(signal.SIGINT, future.cancel)
+        #loop.add_signal_handler(signal.SIGTERM, future.cancel)
         return loop.run_until_complete(future)
 
 

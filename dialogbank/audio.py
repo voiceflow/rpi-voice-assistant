@@ -13,6 +13,7 @@ SYS_TYPING_PATH = os.path.join(os.path.dirname(__file__), "assets/keyboard_typin
 
 log = structlog.get_logger(__name__)
 
+
 class MicrophoneStream(object):
     """Opens a recording stream as a generator yielding the audio chunks."""
 
@@ -78,16 +79,18 @@ class MicrophoneStream(object):
 
     def generator(self):
         while not self.closed:
+            print("Before first chunk")
             # Use a blocking get() to ensure there's at least one chunk of
             # data, and stop iteration if the chunk is None, indicating the
             # end of the audio stream.
-            chunk = self._buff.get()
+            chunk = self._buff.get() #get_timed_interruptable_precise(self._buff, 100)
             if chunk is None:
                 return
             data = [chunk]
 
             # Now consume whatever other data's still buffered.
             while True:
+                print("after first chunk")
                 try:
                     chunk = self._buff.get(block=False)
                     if chunk is None:
