@@ -6,6 +6,7 @@ import queue
 import base64
 import os
 import structlog
+import time
 
 SYS_BEEP_BEEP_PATH = os.path.join(os.path.dirname(__file__),"assets/beepbeep.wav")
 SYS_BEEP_PATH = os.path.join(os.path.dirname(__file__),"assets/beep.wav")
@@ -17,7 +18,7 @@ log = structlog.get_logger(__name__)
 class MicrophoneStream(object):
     """Opens a recording stream as a generator yielding the audio chunks."""
 
-    def __init__(self, rate, chunk):
+    def __init__(self, rate, chunk, timeout = 10):
         self._rate = rate
         self._chunk = chunk
 
@@ -26,6 +27,8 @@ class MicrophoneStream(object):
         self.cur_frame = []
         self.closed = True
         self.enabled = False
+        self.stream_start = None
+        self.timeout = timeout
 
     def __enter__(self):
         self._audio_interface = pyaudio.PyAudio()
@@ -73,6 +76,7 @@ class MicrophoneStream(object):
     def start_buf(self):
         self._buff = queue.Queue() # Create a new queue (clear), otherwise there might be remanents of the old queue data for the sync get chunk
         self.enabled = True
+        self.stream_start = time.time()
 
     def stop_buf(self):
         self.enabled = False
@@ -82,8 +86,10 @@ class MicrophoneStream(object):
             # Use a blocking get() to ensure there's at least one chunk of
             # data, and stop iteration if the chunk is None, indicating the
             # end of the audio stream.
-            chunk = self._buff.get() #get_timed_interruptable_precise(self._buff, 100)
+            chunk = self._buff.get()
             if chunk is None:
+                return
+            if time.time() - self.stream_start > self.timeout:
                 return
             data = [chunk]
 

@@ -2,6 +2,7 @@ import os
 import structlog
 import uuid
 import signal
+import time
 
 from dotenv import load_dotenv
 from google.cloud import speech_v1 as speech
@@ -23,17 +24,19 @@ language_code = "de-DE"  #BCP-47 language tag
 
 log = structlog.get_logger(__name__)
 dialogbench_runner = None
+last_sig_int = None
 
 class DialogBenchRunner():
-    def __init__(self, voiceflow_client: Voiceflow, audio_player: audio.AudioPlayer, elevenlabs_client: ElevenLabs, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig):
+    def __init__(self, voiceflow_client: Voiceflow, audio_player: audio.AudioPlayer, elevenlabs_client: ElevenLabs, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, stream_rate: int = 16000, stream_chunk: int = 128, stream_timeout: int = 10):
         self.voiceflow_client = voiceflow_client
         self.audio_player = audio_player
         self.elevenlabs_client = elevenlabs_client
         self.google_asr_client = google_asr_client
         self.google_streaming_config = google_streaming_config
+        self.microphone_stream = audio.MicrophoneStream(stream_rate, stream_chunk, stream_timeout)
     
     def run(self):
-        with audio.MicrophoneStream(RATE, CHUNK) as stream:
+        with self.microphone_stream as stream:
         # Each loop iteration represents one interaction of one user with the voice assistant
             while True:
                 self.voiceflow_client.user_id = uuid.uuid4()
@@ -71,12 +74,18 @@ class DialogBenchRunner():
     def reset(self):
         self.voiceflow_client.user_state.delete()
         self.audio_player.stop()
-    
+        del self.microphone_stream #make sure the __exit__ function is triggered
+        self.microphone_stream = audio.MicrophoneStream(RATE, CHUNK)    
 
 def sigint_handler(signum, frame):
     # Hacky solution for now until we can find a way to have a dedicated dialogbench thread.
     # Currently not possible due to asynchronous behaviour and some requirements for being executed by the main thread.
+    global last_sig_int
+    if last_sig_int and time.time() - last_sig_int < 5:
+        log.debug("Received SIGINT too soon after last one, continuing.")
+        return
     log.debug("Received SIGINT, restarting conversation handler.")
+    last_sig_int = time.time()
     global dialogbench_runner
     if dialogbench_runner:
         dialogbench_runner.reset()
