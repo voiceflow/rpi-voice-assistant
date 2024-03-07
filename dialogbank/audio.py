@@ -79,7 +79,6 @@ class MicrophoneStream(object):
 
     def generator(self):
         while not self.closed:
-            print("Before first chunk")
             # Use a blocking get() to ensure there's at least one chunk of
             # data, and stop iteration if the chunk is None, indicating the
             # end of the audio stream.
@@ -90,7 +89,6 @@ class MicrophoneStream(object):
 
             # Now consume whatever other data's still buffered.
             while True:
-                print("after first chunk")
                 try:
                     chunk = self._buff.get(block=False)
                     if chunk is None:
@@ -176,7 +174,7 @@ class AudioPlayer():
         self.play_wav(SYS_BEEP_BEEP_PATH)
 
     def async_waiting_tone(self):
-        self.play_wav(SYS_TYPING_PATH)
+        self.play_wav(os.getenv('WAIT_TONE_PATH', SYS_TYPING_PATH))
 
 # Process response from Google ASR
 def process(responses):

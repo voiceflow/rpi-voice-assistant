@@ -78,8 +78,9 @@ def sigint_handler(signum, frame):
     # Currently not possible due to asynchronous behaviour and some requirements for being executed by the main thread.
     log.debug("Received SIGINT, restarting conversation handler.")
     global dialogbench_runner
-    dialogbench_runner.reset()
-    dialogbench_runner.run()
+    if dialogbench_runner:
+        dialogbench_runner.reset()
+        dialogbench_runner.run()
 
 signal.signal(signal.SIGINT, sigint_handler)
 
@@ -129,7 +130,7 @@ def main():
             voice_id=os.getenv('EL_VOICE_ID', "dummy_key"))
 
     audio_player = audio.AudioPlayer()
-    
+
     global dialogbench_runner
     dialogbench_runner = DialogBenchRunner(voiceflow_client, audio_player, elevenlabs_client, google_asr_client, google_streaming_config)
     dialogbench_runner.run()
