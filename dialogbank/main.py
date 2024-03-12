@@ -1,11 +1,10 @@
 import os
 import structlog
 import uuid
-import signal
-import time
 
 from dotenv import load_dotenv
 from google.cloud import speech_v1 as speech
+from multiprocessing import Process
 
 from . import audio
 from .voiceflow import Voiceflow
@@ -13,6 +12,13 @@ from .elevenlabs import ElevenLabs
 
 from typing import Dict, Any
 JSON = Dict[str, Any]
+
+import tty, sys, termios
+
+#TODO: somewhat hacky keyboard input but works without sudo, check if better options.
+filedescriptors = termios.tcgetattr(sys.stdin)
+tty.setcbreak(sys.stdin)
+x = 0
 
 # Setup
 load_dotenv()
@@ -23,75 +29,6 @@ CHUNK = 128
 language_code = "de-DE"  #BCP-47 language tag
 
 log = structlog.get_logger(__name__)
-dialogbench_runner = None
-last_sig_int = None
-
-class DialogBenchRunner():
-    def __init__(self, voiceflow_client: Voiceflow, audio_player: audio.AudioPlayer, elevenlabs_client: ElevenLabs, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, stream_rate: int = 16000, stream_chunk: int = 128, stream_timeout: int = 10):
-        self.voiceflow_client = voiceflow_client
-        self.audio_player = audio_player
-        self.elevenlabs_client = elevenlabs_client
-        self.google_asr_client = google_asr_client
-        self.google_streaming_config = google_streaming_config
-        self.microphone_stream = audio.MicrophoneStream(stream_rate, stream_chunk, stream_timeout)
-    
-    def run(self):
-        with self.microphone_stream as stream:
-        # Each loop iteration represents one interaction of one user with the voice assistant
-            while True:
-                self.voiceflow_client.user_id = uuid.uuid4()
-                log.debug("[Voice Assistant]: Starting voice assistant", voiceflow_user_id=self.voiceflow_client.user_id)
-                input("Press Enter to start the voice assistant...")
-
-                end = False
-                self.audio_player.async_waiting_tone() #signal processing to user
-
-                log.debug("[Voiceflow]: Requesting first voiceflow interaction.", voiceflow_user_id=self.voiceflow_client.user_id)
-                vf_response = self.voiceflow_client.interact.launch()
-                end = handle_vf_response(self.voiceflow_client, vf_response, self.elevenlabs_client, self.audio_player)
-
-                while not end:
-                    self.audio_player.beep() #signal start of listening to user
-                    log.debug("[Voice Assistant]: Start listening.")
-                    stream.start_buf()
-
-                    audio_generator = stream.generator()
-                    requests = (
-                        speech.StreamingRecognizeRequest(audio_content=content)
-                        for content in audio_generator
-                    )
-                    responses = self.google_asr_client.streaming_recognize(self.google_streaming_config, requests)
-                    utterance = audio.process(responses)
-                    
-                    log.debug("[Google ASR]: Recognized utterance", utterance=utterance)
-                    stream.stop_buf()
-                    log.debug("[Voice Assistant]: Stop listening.")
-                    
-                    self.audio_player.async_waiting_tone() #signal processing to user
-                    vf_response = self.voiceflow_client.interact.text(user_input=utterance)
-                    end = handle_vf_response(self.voiceflow_client, vf_response, self.elevenlabs_client, self.audio_player)
-    
-    def reset(self):
-        self.voiceflow_client.user_state.delete()
-        self.audio_player.stop()
-        del self.microphone_stream #make sure the __exit__ function is triggered
-        self.microphone_stream = audio.MicrophoneStream(RATE, CHUNK)    
-
-def sigint_handler(signum, frame):
-    # Hacky solution for now until we can find a way to have a dedicated dialogbench thread.
-    # Currently not possible due to asynchronous behaviour and some requirements for being executed by the main thread.
-    global last_sig_int
-    if last_sig_int and time.time() - last_sig_int < 5:
-        log.debug("Received SIGINT too soon after last one, continuing.")
-        return
-    log.debug("Received SIGINT, restarting conversation handler.")
-    last_sig_int = time.time()
-    global dialogbench_runner
-    if dialogbench_runner:
-        dialogbench_runner.reset()
-        dialogbench_runner.run()
-
-signal.signal(signal.SIGINT, sigint_handler)
 
 def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_player: audio.AudioPlayer):
     for item in vf_response:
@@ -115,8 +52,40 @@ def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_p
             return True 
     return False
 
+def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, elevenlabs_client: ElevenLabs, audio_player: audio.AudioPlayer):
+    with audio.MicrophoneStream(RATE, CHUNK) as stream:
+        # Each loop iteration represents one interaction of one user with the voice assistant
+        end = False
+        audio_player.async_waiting_tone() #signal processing to user
+
+        log.debug("[Voiceflow]: Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
+        vf_response = voiceflow_client.interact.launch()
+        end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player)
+
+        while not end:
+            audio_player.beep() #signal start of listening to user
+            log.debug("[Voice Assistant]: Start listening.")
+            stream.start_buf()
+
+            audio_generator = stream.generator()
+            requests = (
+                speech.StreamingRecognizeRequest(audio_content=content)
+                for content in audio_generator
+            )
+
+            responses = google_asr_client.streaming_recognize(google_streaming_config, requests)
+            utterance = audio.process(responses)
+            
+            log.debug("[Google ASR]: Recognized utterance", utterance=utterance)
+            stream.stop_buf()
+            log.debug("[Voice Assistant]: Stop listening.")
+            
+            audio_player.async_waiting_tone() #signal processing to user
+            vf_response = voiceflow_client.interact.text(user_input=utterance)
+            end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player)
+
 def main():
-    # Setup necessary clients and integrations 
+
     voiceflow_client = Voiceflow(
         api_key=os.getenv('VF_API_KEY', "dummy_key"),
         user_id=uuid.uuid4()
@@ -139,10 +108,21 @@ def main():
             voice_id=os.getenv('EL_VOICE_ID', "dummy_key"))
 
     audio_player = audio.AudioPlayer()
+    
+    while True:
+        voiceflow_client.user_id = uuid.uuid4()
+        log.debug("[Voice Assistant]: Starting voice assistant", voiceflow_user_id=voiceflow_client.user_id)
+        input("Press Enter to start the voice assistant...")
+        p = Process(target=run_dialogbench, args=(voiceflow_client, google_asr_client, google_streaming_config, elevenlabs_client, audio_player))
+        p.start()
+        while True:  # making a loop
+            x=sys.stdin.read(1)[0]
+            if (x == 'q'):
+                p.terminate()
+                print("Terminated process")
+                break
 
-    global dialogbench_runner
-    dialogbench_runner = DialogBenchRunner(voiceflow_client, audio_player, elevenlabs_client, google_asr_client, google_streaming_config)
-    dialogbench_runner.run()
-
+#TODO on exit kill all processes!
+                
 if __name__ == "__main__":
     main()
