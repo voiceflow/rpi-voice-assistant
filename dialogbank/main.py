@@ -9,6 +9,7 @@ from multiprocessing import Process
 from . import audio
 from .voiceflow import Voiceflow
 from .elevenlabs import ElevenLabs
+from pytimedinput import timedKey
 
 from typing import Dict, Any
 JSON = Dict[str, Any]
@@ -82,15 +83,12 @@ class LEDStatusManager():
     def show(self):
         for led, value in self.config.items():
             cur_status = value[self.status[led]]
-            print(cur_status)
-            print(*self.colors[cur_status])
             set_pixel(led, *self.colors[cur_status])
             show()
 
     def update(self, context, status):
         led = self.leds[context]
         self.status[led] = status
-        print(self.status)
         self.show()
 
     def update_wifi_availability(self):
@@ -112,8 +110,6 @@ class LEDStatusManager():
         except socket.error as ex:
             print(ex)
             return False
-
-
 
 #TODO: somewhat hacky keyboard input but works without sudo, check if better options.
 filedescriptors = termios.tcgetattr(sys.stdin)
@@ -186,6 +182,15 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
             vf_response = voiceflow_client.interact.text(user_input=utterance)
             end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player)
 
+def wait_for_start_signal(led_status_manager):
+    #Busy wait is necessary as a simple way to continue polling WIFI status.
+    #TODO: Perhaps move to WIFI updating process.
+    while True:
+        led_status_manager.update_wifi_availability()
+        userText, timedOut = timedKey("Press any key to start the voice assistant", timeout=5)
+        if (not timedOut):
+            return
+
 def main():
 
     led_status_manager = LEDStatusManager()
@@ -217,8 +222,7 @@ def main():
     while True:
         voiceflow_client.user_id = uuid.uuid4()
         log.debug("[Voice Assistant]: Starting voice assistant", voiceflow_user_id=voiceflow_client.user_id)
-        led_status_manager.update_wifi_availability()
-        input("Press Enter to start the voice assistant...")
+        wait_for_start_signal(led_status_manager)
         p = Process(target=run_dialogbench, args=(voiceflow_client, google_asr_client, google_streaming_config, elevenlabs_client, audio_player))
         p.start()
         while True:  # making a loop
