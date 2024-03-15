@@ -4,7 +4,7 @@ import uuid
 
 from dotenv import load_dotenv
 from google.cloud import speech_v1 as speech
-from multiprocessing import Process
+from multiprocessing import Process, shared_memory
 
 from . import audio
 from .voiceflow import Voiceflow
@@ -15,7 +15,6 @@ from typing import Dict, Any
 JSON = Dict[str, Any]
 
 import tty, sys, termios
-
 
 from blinkt import set_pixel, show
 import socket
@@ -78,7 +77,15 @@ class LEDStatusManager():
              LISTENING: 'BLUE'},
     }
 
-    status = [0, 0, 0, 0, 0, 0, 0, 0]
+    def __init__(self, shared_list=None):
+        self.main_process = False
+
+        if not shared_list:
+            shared_list = shared_memory.ShareableList([0, 0, 0, 0, 0, 0, 0, 0])
+            self.main_process = True
+
+        self.status = shared_list
+
 
     def show(self):
         for led, value in self.config.items():
@@ -110,6 +117,12 @@ class LEDStatusManager():
         except socket.error as ex:
             print(ex)
             return False
+        
+    def __del__(self):
+        self.status.shm.close()
+        if self.main_process:
+            #TODO: a bit hacky?
+            self.status.shm.unlink()
 
 #TODO: somewhat hacky keyboard input but works without sudo, check if better options.
 filedescriptors = termios.tcgetattr(sys.stdin)
@@ -148,7 +161,10 @@ def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_p
             return True 
     return False
 
-def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, elevenlabs_client: ElevenLabs, audio_player: audio.AudioPlayer):
+def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, elevenlabs_client: ElevenLabs, audio_player: audio.AudioPlayer, shared_status_list: shared_memory.ShareableList):
+    led_status_manager = LEDStatusManager(shared_status_list)
+    led_status_manager.update('APPLICATION', LEDStatusManager.CONVERSATION_RUNNING)
+
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
         # Each loop iteration represents one interaction of one user with the voice assistant
         end = False
@@ -192,7 +208,6 @@ def wait_for_start_signal(led_status_manager):
             return
 
 def main():
-
     led_status_manager = LEDStatusManager()
     led_status_manager.update_wifi_availability()
 
@@ -223,7 +238,7 @@ def main():
         voiceflow_client.user_id = uuid.uuid4()
         log.debug("[Voice Assistant]: Starting voice assistant", voiceflow_user_id=voiceflow_client.user_id)
         wait_for_start_signal(led_status_manager)
-        p = Process(target=run_dialogbench, args=(voiceflow_client, google_asr_client, google_streaming_config, elevenlabs_client, audio_player))
+        p = Process(target=run_dialogbench, args=(voiceflow_client, google_asr_client, google_streaming_config, elevenlabs_client, audio_player, led_status_manager.status))
         p.start()
         while True:  # making a loop
             x = sys.stdin.read(1)[0]
