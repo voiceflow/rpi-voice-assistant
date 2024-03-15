@@ -14,8 +14,6 @@ from pytimedinput import timedKey
 from typing import Dict, Any
 JSON = Dict[str, Any]
 
-import tty, sys, termios
-
 from blinkt import set_pixel, show
 import socket
 
@@ -95,7 +93,7 @@ class LEDStatusManager():
         for led, value in self.config.items():
             cur_status = value[self.status[led]]
             set_pixel(led, *self.colors[cur_status])
-            show()
+        show()
 
     def update(self, context, status):
         led = self.leds[context]
@@ -108,7 +106,7 @@ class LEDStatusManager():
         else:
             self.update('WIFI', self.WIFI_OFF)
         
-    def check_internet_availability(self, host="8.8.8.8", port=53, timeout=3):
+    def check_internet_availability(self, host="8.8.8.8", port=53, timeout=2):
         """
         Host: 8.8.8.8 (google-public-dns-a.google.com)
         OpenPort: 53/tcp
@@ -122,16 +120,17 @@ class LEDStatusManager():
             print(ex)
             return False
         
+    def turn_off_leds(self):
+        for led in self.config:
+            print(led)
+            set_pixel(led, 0, 0, 0)
+        show()
+        
     def __del__(self):
         self.status.shm.close()
         if self.main_process:
             #TODO: a bit hacky?
             self.status.shm.unlink()
-
-#TODO: somewhat hacky keyboard input but works without sudo, check if better options.
-filedescriptors = termios.tcgetattr(sys.stdin)
-tty.setcbreak(sys.stdin)
-x = 0
 
 # Setup
 load_dotenv()
@@ -211,13 +210,13 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
                 led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.RUNNING_REQUEST)
                 responses = google_asr_client.streaming_recognize(google_streaming_config, requests)
                 led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.SUCCESSFUL_REQUEST)
+                utterance = audio.process(responses)
+                log.debug("[Google ASR]: Recognized utterance", utterance=utterance)
             except Exception as e:
                 log.error("Error in Google ASR interaction", error=str(e))
                 led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
                 return
             
-            utterance = audio.process(responses)
-            log.debug("[Google ASR]: Recognized utterance", utterance=utterance)
 
             stream.stop_buf()
             log.debug("[Voice Assistant]: Stop listening.")
@@ -248,6 +247,7 @@ def wait_for_start_signal(led_status_manager):
             return
         
 def main():
+    #Run setup for Dialogbench Loop
     led_status_manager = LEDStatusManager()
     led_status_manager.update_wifi_availability()
     led_status_manager.update('APPLICATION', LEDStatusManager.BOOTING)
@@ -293,8 +293,7 @@ def main():
                 log.debug("[Dialogbench]: Terminating process due to user interrupt.")
                 break
 
-
-#TODO on exit kill all processes!
+#TODO: At exit also kill child processes
                 
 if __name__ == "__main__":
     main()
