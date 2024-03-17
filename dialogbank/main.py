@@ -19,6 +19,7 @@ JSON = Dict[str, Any]
 
 # Setup
 load_dotenv()
+load_dotenv("/etc/dialogbank/dialogbank.env")
 
 # Google ASR Config Values
 RATE = 16000

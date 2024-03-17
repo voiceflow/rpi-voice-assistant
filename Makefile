@@ -26,5 +26,5 @@ dist/dialogbank.deb: dist
 		--depends mpv \
 		--deb-systemd deb/dialogbank.service \
 		--deb-systemd-enable \
-		--deb-systemd-auto-start \
+		--config-files etc/dialogbank/dialogbank.env \
 		.
