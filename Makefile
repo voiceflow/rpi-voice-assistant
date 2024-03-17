@@ -13,6 +13,7 @@ install: dist/dialogbank.deb
 
 dist/dialogbank.deb: dist
 	fpm \
+		--version $$(python3 setup.py --version) \
 		--verbose \
 		--debug \
 		--architecture all \
