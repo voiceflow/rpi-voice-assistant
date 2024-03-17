@@ -15,6 +15,10 @@ setup(
         "structlog>=21.1.0",
         "python-dotenv>=1.0.1",
         "requests>=2.31.0",
+        # grpcio is a transitive dependency of google-cloud-speech. grpcio is a Cython
+        # package and not installing it explicitly causes problems when packaging for Debian
+        # for some reason. I haven’t found out why exactly so far.
+        "grpcio>=1.49.1,<2.0dev",
     ],
     include_package_data=True,
     package_data={
