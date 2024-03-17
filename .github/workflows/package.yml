@@ -16,6 +16,8 @@ jobs:
         with:
           tags: dialogbank
           platforms: linux/arm/v8
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build Debian Package
         run: docker compose run dev make
