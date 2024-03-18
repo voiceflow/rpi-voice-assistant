@@ -1,21 +1,20 @@
+from multiprocessing import Process, shared_memory
 import os
+import socket
 import structlog
 import uuid
 
 from dotenv import load_dotenv
 from google.cloud import speech_v1 as speech
-from multiprocessing import Process, shared_memory
+from pytimedinput import timedKey
+from blinkt import set_pixel, show
 
 from . import audio
 from .voiceflow import Voiceflow
 from .elevenlabs import ElevenLabs
-from pytimedinput import timedKey
 
 from typing import Dict, Any
 JSON = Dict[str, Any]
-
-from blinkt import set_pixel, show
-import socket
 
 class LEDStatusManager():
 
@@ -35,7 +34,8 @@ class LEDStatusManager():
         'GREEN' : (0, 255, 0),
         'BLUE' : (0, 0, 255),
         'YELLOW': (255, 255, 0),
-        'WHITE': (0, 0, 0)
+        'WHITE': (0, 0, 0),
+        'PINK': (255, 105, 180),
     }
 
     #cheap bimap to allow easy access
@@ -76,7 +76,7 @@ class LEDStatusManager():
              SUCCESSFUL_REQUEST: 'GREEN',
              RUNNING_REQUEST: 'BLUE'},
         5 : {NO_DATA: 'WHITE',
-             LISTENING: 'BLUE'},
+             LISTENING: 'PINK'},
     }
 
     def __init__(self, shared_list=None):
@@ -87,7 +87,6 @@ class LEDStatusManager():
             self.main_process = True
 
         self.status = shared_list
-
 
     def show(self):
         for led, value in self.config.items():
@@ -139,8 +138,12 @@ load_dotenv()
 RATE = 16000
 CHUNK = 128
 language_code = "de-DE"  #BCP-47 language tag
+FAILED_REQUEST = -1
 
 log = structlog.get_logger(__name__)
+
+def run_elevenlabs_interaction(el: ElevenLabs, message: str, led_status_manager: LEDStatusManager):
+    
 
 def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_player: audio.AudioPlayer, led_status_manager: LEDStatusManager):
     for item in vf_response:
@@ -171,6 +174,28 @@ def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_p
             return True 
     return False
 
+def is_successful_vf_response(response: JSON):
+    for item in response:
+        if "type" in item:
+            return True
+    return False
+
+def run_voiceflow_launch_request(voiceflow_client: Voiceflow, led_status_manager: LEDStatusManager):
+    try:    
+        log.debug("[Voiceflow]: Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
+        led_status_manager.update('VOICEFLOW_API', LEDStatusManager.RUNNING_REQUEST)
+        vf_response = voiceflow_client.interact.launch()
+        if not is_successful_vf_response(vf_response):
+            led_status_manager.update('VOICEFLOW_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
+            return FAILED_REQUEST
+        #TODO: Check if response success -> if not, handle error
+        led_status_manager.update('VOICEFLOW_API', LEDStatusManager.SUCCESSFUL_REQUEST)
+        return vf_response
+    except Exception as e:
+        log.error("Error in voiceflow interaction", error=str(e))
+        led_status_manager.update('VOICEFLOW_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
+        return FAILED_REQUEST
+
 def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, elevenlabs_client: ElevenLabs, audio_player: audio.AudioPlayer, shared_status_list: shared_memory.ShareableList):
     led_status_manager = LEDStatusManager(shared_status_list)
     led_status_manager.update('APPLICATION', LEDStatusManager.CONVERSATION_RUNNING)
@@ -181,17 +206,10 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
         audio_player.async_waiting_tone() #signal processing to user
 
         #TODO: Extract to method
-        try:    
-            log.debug("[Voiceflow]: Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
-            led_status_manager.update('VOICEFLOW_API', LEDStatusManager.RUNNING_REQUEST)
-            vf_response = voiceflow_client.interact.launch()
-            #TODO: Check if response success -> if not, handle error
-            led_status_manager.update('VOICEFLOW_API', LEDStatusManager.SUCCESSFUL_REQUEST)
-        except Exception as e:
-            log.error("Error in voiceflow interaction", error=str(e))
-            led_status_manager.update('VOICEFLOW_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
+        vf_response = run_voiceflow_launch_request(voiceflow_client, led_status_manager)
+        if vf_response == FAILED_REQUEST:
             return
-
+        
         end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player, led_status_manager)
 
         while not end:
@@ -223,6 +241,7 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
             led_status_manager.update('LISTENING', LEDStatusManager.NO_DATA)
             
             audio_player.async_waiting_tone() #signal processing to user
+
 
             try:    
                 log.debug("[Voiceflow]: Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
