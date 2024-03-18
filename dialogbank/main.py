@@ -142,7 +142,7 @@ FAILED_REQUEST = -1
 
 log = structlog.get_logger(__name__)
 
-def run_elevenlabs_interaction(el: ElevenLabs, message: str, led_status_manager: LEDStatusManager):
+#def run_elevenlabs_interaction(el: ElevenLabs, message: str, led_status_manager: LEDStatusManager):
     
 
 def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_player: audio.AudioPlayer, led_status_manager: LEDStatusManager):
