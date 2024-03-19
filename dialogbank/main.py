@@ -293,9 +293,10 @@ def main():
             voice_id=os.getenv('EL_VOICE_ID', "dummy_key"))
 
     audio_player = audio.AudioPlayer()
-    
+
     while True:
         voiceflow_client.user_id = uuid.uuid4()
+        audio_player.stop()
         log.debug("[Voice Assistant]: Starting voice assistant", voiceflow_user_id=voiceflow_client.user_id)
         led_status_manager.update('APPLICATION', LEDStatusManager.READY)
 
