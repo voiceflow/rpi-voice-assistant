@@ -128,7 +128,7 @@ def wait_for_start_signal(led_status_manager):
     #TODO: Perhaps move to WIFI updating process.
     while True:
         led_status_manager.update_wifi_availability()
-        userText, timedOut = timedKey("Press any key to start the voice assistant\n", timeout=5)
+        userText, timedOut = timedKey("Press s to start the voice assistant. \n", allowCharacters="s", timeout=5)
         if (not timedOut):
             return
 
@@ -151,7 +151,7 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
             utterance = recognize_user_input(google_asr_client, google_streaming_config, led_status_manager, stream)
             
             audio_player.async_waiting_tone() #signal processing to user
-            run_voiceflow_interact_request(voiceflow_client, led_status_manager, utterance)
+            vf_response = run_voiceflow_interact_request(voiceflow_client, led_status_manager, utterance)
 
             end, message = handle_vf_response(voiceflow_client, vf_response)
         
