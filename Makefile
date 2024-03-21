@@ -25,7 +25,6 @@ dist/dialogbank.deb: dist
 		--prefix /usr/share/python \
 		--depends portaudio19-dev \
 		--depends mpv \
-		--deb-systemd deb/dialogbank.service \
-		--deb-systemd-enable \
 		--config-files etc/dialogbank/dialogbank.env \
+		--config-files usr/lib/systemd/user/dialogbank.service \
 		.
