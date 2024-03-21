@@ -43,16 +43,19 @@ def generate_and_play_elevenlabs_audio(el: ElevenLabs, message: str, led_status_
     led_status_manager.update('ELEVENLABS_API', LEDStatusManager.SUCCESSFUL_REQUEST)
 
 def handle_vf_response(vf: Voiceflow, vf_response: JSON) -> tuple[bool, str | None]:
+    messages = []
     for item in vf_response:
         if item["type"] == "speak":
             message = item["payload"]["message"]
             log.debug("[Voiceflow]: Got response", response=message)
-            return False, message
+            messages.append(message)
         elif item["type"] == "end":
             log.debug("[Voiceflow]: Got end of interaction.")
             log.debug("[Voice Assistant]: =========END OF INTERACTION=========")
             vf.user_state.delete()
             return True, None 
+    if messages:
+        return False, ".".join(messages)
     #Fallback: If no text message returned from Voiceflow, end interaction
     log.error("[Voiceflow]: No speak or end type in response.")
     return True, None
@@ -120,7 +123,6 @@ def recognize_user_input(google_asr_client: speech.SpeechClient, google_streamin
     stream.stop_buf()
     log.debug("[Voice Assistant]: Stop listening.")
     led_status_manager.update('LISTENING', LEDStatusManager.NO_DATA)
-
     return utterance
 
 def wait_for_start_signal(led_status_manager):
@@ -154,6 +156,7 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
             vf_response = run_voiceflow_interact_request(voiceflow_client, led_status_manager, utterance)
 
             end, message = handle_vf_response(voiceflow_client, vf_response)
+            log.debug(f"Voiceflow generated message", message)
         
 def main():
     #Run setup for Dialogbench Loop
