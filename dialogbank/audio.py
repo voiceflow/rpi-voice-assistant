@@ -27,8 +27,6 @@ class MicrophoneStream(object):
         self.cur_frame = []
         self.closed = True
         self.enabled = False
-        self.stream_start = None
-        self.timeout = timeout
 
     def __enter__(self):
         self._audio_interface = pyaudio.PyAudio()
@@ -76,7 +74,6 @@ class MicrophoneStream(object):
     def start_buf(self):
         self._buff = queue.Queue() # Create a new queue (clear), otherwise there might be remanents of the old queue data for the sync get chunk
         self.enabled = True
-        self.stream_start = time.time()
 
     def stop_buf(self):
         self.enabled = False
@@ -88,8 +85,6 @@ class MicrophoneStream(object):
             # end of the audio stream.
             chunk = self._buff.get()
             if chunk is None:
-                return
-            if time.time() - self.stream_start > self.timeout:
                 return
             data = [chunk]
 

@@ -106,7 +106,6 @@ class LEDStatusManager():
         
     def turn_off_leds(self):
         for led in self.config:
-            print(led)
             set_pixel(led, 0, 0, 0)
         show()
         
