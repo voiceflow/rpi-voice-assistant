@@ -1,135 +1,21 @@
 from multiprocessing import Process, shared_memory
 import os
-import socket
+
 import structlog
+import sys
 import uuid
 
 from dotenv import load_dotenv
 from google.cloud import speech_v1 as speech
 from pytimedinput import timedKey
-from blinkt import set_pixel, show
 
 from . import audio
 from .voiceflow import Voiceflow
 from .elevenlabs import ElevenLabs
+from .led_status import LEDStatusManager
 
 from typing import Dict, Any
 JSON = Dict[str, Any]
-
-class LEDStatusManager():
-
-    NO_DATA = 0
-    WIFI_OFF = 1
-    WIFI_ON = 2
-    BOOTING = 1
-    READY = 2
-    CONVERSATION_RUNNING = 3
-    UNSUCCESSFUL_REQUEST = 1
-    SUCCESSFUL_REQUEST = 2
-    RUNNING_REQUEST = 3
-    LISTENING = 1
-
-    colors = {
-        'RED' : (255, 0, 0),
-        'GREEN' : (0, 255, 0),
-        'BLUE' : (0, 0, 255),
-        'YELLOW': (255, 255, 0),
-        'WHITE': (0, 0, 0),
-        'PINK': (255, 105, 180),
-    }
-
-    #cheap bimap to allow easy access
-    leds = {
-        0 : 'WIFI',
-        1 : 'APPLICATION',
-        2 : 'GOOGLE_ASR_API',
-        3 : 'VOICEFLOW_API',
-        4 : 'ELEVENLABS_API',
-        5 : 'LISTENING',
-        'WIFI' : 0,
-        'APPLICATION' : 1,
-        'GOOGLE_ASR_API' : 2,
-        'VOICEFLOW_API' : 3,
-        'ELEVENLABS_API' : 4,
-        'LISTENING' : 5
-    }
-
-    config = {
-        #LED #Status #Color #Interpretation
-        0 : {NO_DATA: 'WHITE',
-             WIFI_OFF: 'RED', 
-             WIFI_ON: 'GREEN'},
-        1 : {NO_DATA: 'WHITE',
-             BOOTING: 'YELLOW',
-             READY: 'GREEN',
-             CONVERSATION_RUNNING: 'BLUE'},
-        2 : {NO_DATA: 'WHITE',
-             UNSUCCESSFUL_REQUEST: 'RED',
-             SUCCESSFUL_REQUEST: 'GREEN',
-             RUNNING_REQUEST: 'BLUE'},
-        3 : {NO_DATA: 'WHITE',
-             UNSUCCESSFUL_REQUEST: 'RED',
-             SUCCESSFUL_REQUEST: 'GREEN',
-             RUNNING_REQUEST: 'BLUE'},
-        4 : {NO_DATA: 'WHITE',
-             UNSUCCESSFUL_REQUEST: 'RED',
-             SUCCESSFUL_REQUEST: 'GREEN',
-             RUNNING_REQUEST: 'BLUE'},
-        5 : {NO_DATA: 'WHITE',
-             LISTENING: 'PINK'},
-    }
-
-    def __init__(self, shared_list=None):
-        self.main_process = False
-
-        if not shared_list:
-            shared_list = shared_memory.ShareableList([0, 0, 0, 0, 0, 0, 0, 0])
-            self.main_process = True
-
-        self.status = shared_list
-
-    def show(self):
-        for led, value in self.config.items():
-            cur_status = value[self.status[led]]
-            set_pixel(led, *self.colors[cur_status])
-        show()
-
-    def update(self, context, status):
-        led = self.leds[context]
-        self.status[led] = status
-        self.show()
-
-    def update_wifi_availability(self):
-        if self.check_internet_availability():
-            self.update('WIFI', self.WIFI_ON)
-        else:
-            self.update('WIFI', self.WIFI_OFF)
-        
-    def check_internet_availability(self, host="8.8.8.8", port=53, timeout=2):
-        """
-        Host: 8.8.8.8 (google-public-dns-a.google.com)
-        OpenPort: 53/tcp
-        Service: domain (DNS/TCP)
-        """
-        try:
-            socket.setdefaulttimeout(timeout)
-            socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
-            return True
-        except socket.error as ex:
-            print(ex)
-            return False
-        
-    def turn_off_leds(self):
-        for led in self.config:
-            print(led)
-            set_pixel(led, 0, 0, 0)
-        show()
-        
-    def __del__(self):
-        self.status.shm.close()
-        if self.main_process:
-            #TODO: a bit hacky?
-            self.status.shm.unlink()
 
 # Setup
 load_dotenv()
@@ -142,59 +28,109 @@ FAILED_REQUEST = -1
 
 log = structlog.get_logger(__name__)
 
-#def run_elevenlabs_interaction(el: ElevenLabs, message: str, led_status_manager: LEDStatusManager):
-    
+def generate_and_play_elevenlabs_audio(el: ElevenLabs, message: str, led_status_manager: LEDStatusManager, audio_player: audio.AudioPlayer) -> bool:
+    """
+        Generates audio using the Elevenlabs API and plays it back.
+    """
+    try:
+        led_status_manager.update('ELEVENLABS_API', LEDStatusManager.RUNNING_REQUEST)
+        stream = el.generate_audio_stream(message)
+        audio_player.play_audio_stream(stream)
+    except Exception as e:
+        log.error("Error in Elevenlabs interaction", error=str(e))
+        led_status_manager.update('ELEVENLABS_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
+        sys.exit(1)
+    led_status_manager.update('ELEVENLABS_API', LEDStatusManager.SUCCESSFUL_REQUEST)
 
-def handle_vf_response(vf: Voiceflow, vf_response: JSON, el: ElevenLabs, audio_player: audio.AudioPlayer, led_status_manager: LEDStatusManager):
+def handle_vf_response(vf: Voiceflow, vf_response: JSON) -> tuple[bool, str | None]:
     for item in vf_response:
         if item["type"] == "speak":
-
-            payload = item["payload"]
-            message = payload["message"]
-            log.debug("Voiceflow: Got response", response=message)
-
-            if "src" in payload:
-                #play voiceflow generated audio, for using voiceflow set config={"tts" : True} in the interact calls
-                audio_player.play(payload["src"])
-            else:
-                try:
-                    led_status_manager.update('ELEVENLABS_API', LEDStatusManager.RUNNING_REQUEST)
-                    stream = el.generate_audio_stream(message)
-                    led_status_manager.update('ELEVENLABS_API', LEDStatusManager.SUCCESSFUL_REQUEST)
-                except Exception as e:
-                    log.error("Error in Elevenlabs interaction", error=str(e))
-                    led_status_manager.update('ELEVENLABS_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
-                    return True #TODO: Should we rather fail completely?
-                audio_player.play_audio_stream(stream)
-
+            message = item["payload"]["message"]
+            log.debug("[Voiceflow]: Got response", response=message)
+            return False, message
         elif item["type"] == "end":
             log.debug("[Voiceflow]: Got end of interaction.")
             log.debug("[Voice Assistant]: =========END OF INTERACTION=========")
             vf.user_state.delete()
-            return True 
-    return False
+            return True, None 
+    #Fallback: If no text message returned from Voiceflow, end interaction
+    log.error("[Voiceflow]: No speak or end type in response.")
+    return True, None
 
-def is_successful_vf_response(response: JSON):
+def is_successful_vf_response(response: JSON) -> bool:
     for item in response:
         if "type" in item:
             return True
     return False
 
-def run_voiceflow_launch_request(voiceflow_client: Voiceflow, led_status_manager: LEDStatusManager):
+def run_voiceflow_launch_request(voiceflow_client: Voiceflow, led_status_manager: LEDStatusManager) -> dict:
     try:    
         log.debug("[Voiceflow]: Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
         led_status_manager.update('VOICEFLOW_API', LEDStatusManager.RUNNING_REQUEST)
         vf_response = voiceflow_client.interact.launch()
         if not is_successful_vf_response(vf_response):
+            log.error("Unsuccessful Voiceflow API request.", error=str(e))
             led_status_manager.update('VOICEFLOW_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
-            return FAILED_REQUEST
-        #TODO: Check if response success -> if not, handle error
+            sys.exit(1)
         led_status_manager.update('VOICEFLOW_API', LEDStatusManager.SUCCESSFUL_REQUEST)
-        return vf_response
     except Exception as e:
         log.error("Error in voiceflow interaction", error=str(e))
         led_status_manager.update('VOICEFLOW_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
-        return FAILED_REQUEST
+        sys.exit(1)
+    return vf_response
+
+def run_voiceflow_interact_request(voiceflow_client: Voiceflow, led_status_manager: LEDStatusManager, utterance: str) -> dict:
+    try:    
+        log.debug("[Voiceflow]: Requesting voiceflow text interaction.", voiceflow_user_id=voiceflow_client.user_id)
+        led_status_manager.update('VOICEFLOW_API', LEDStatusManager.RUNNING_REQUEST)
+        vf_response = voiceflow_client.interact.text(user_input=utterance)
+        if not is_successful_vf_response(vf_response):
+            log.error("Unsuccessful Voiceflow API request.", error=str(e))
+            led_status_manager.update('VOICEFLOW_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
+            sys.exit(1)        
+        led_status_manager.update('VOICEFLOW_API', LEDStatusManager.SUCCESSFUL_REQUEST)
+    except Exception as e:
+        log.error("Error in voiceflow interaction", error=str(e))
+        led_status_manager.update('VOICEFLOW_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
+        sys.exit(1)
+    return vf_response
+
+def recognize_user_input(google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, led_status_manager: LEDStatusManager, stream) -> str:
+    log.debug("[Voice Assistant]: Start listening.")
+    led_status_manager.update('LISTENING', LEDStatusManager.LISTENING)
+    stream.start_buf()
+
+    audio_generator = stream.generator()
+    requests = (
+        speech.StreamingRecognizeRequest(audio_content=content)
+        for content in audio_generator
+    )
+
+    try:
+        led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.RUNNING_REQUEST)
+        responses = google_asr_client.streaming_recognize(google_streaming_config, requests)
+        led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.SUCCESSFUL_REQUEST)
+        utterance = audio.process(responses)
+        log.debug("[Google ASR]: Recognized utterance", utterance=utterance)
+    except Exception as e:
+        log.error("Error in Google ASR interaction", error=str(e))
+        led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
+        sys.exit(1)
+    
+    stream.stop_buf()
+    log.debug("[Voice Assistant]: Stop listening.")
+    led_status_manager.update('LISTENING', LEDStatusManager.NO_DATA)
+
+    return utterance
+
+def wait_for_start_signal(led_status_manager):
+    #Busy wait is necessary as a simple way to continue polling WIFI status.
+    #TODO: Perhaps move to WIFI updating process.
+    while True:
+        led_status_manager.update_wifi_availability()
+        userText, timedOut = timedKey("Press any key to start the voice assistant\n", timeout=5)
+        if (not timedOut):
+            return
 
 def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, elevenlabs_client: ElevenLabs, audio_player: audio.AudioPlayer, shared_status_list: shared_memory.ShareableList):
     led_status_manager = LEDStatusManager(shared_status_list)
@@ -202,68 +138,22 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
 
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
         # Each loop iteration represents one interaction of one user with the voice assistant
-        end = False
         audio_player.async_waiting_tone() #signal processing to user
 
-        #TODO: Extract to method
         vf_response = run_voiceflow_launch_request(voiceflow_client, led_status_manager)
-        if vf_response == FAILED_REQUEST:
-            return
         
-        end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player, led_status_manager)
+        end, message = handle_vf_response(voiceflow_client, vf_response)
 
         while not end:
-            audio_player.beep() #signal start of listening to user
-            log.debug("[Voice Assistant]: Start listening.")
-            led_status_manager.update('LISTENING', LEDStatusManager.LISTENING)
-            stream.start_buf()
-
-            audio_generator = stream.generator()
-            requests = (
-                speech.StreamingRecognizeRequest(audio_content=content)
-                for content in audio_generator
-            )
-
-            try:
-                led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.RUNNING_REQUEST)
-                responses = google_asr_client.streaming_recognize(google_streaming_config, requests)
-                led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.SUCCESSFUL_REQUEST)
-                utterance = audio.process(responses)
-                log.debug("[Google ASR]: Recognized utterance", utterance=utterance)
-            except Exception as e:
-                log.error("Error in Google ASR interaction", error=str(e))
-                led_status_manager.update('GOOGLE_ASR_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
-                return
+            generate_and_play_elevenlabs_audio(elevenlabs_client, message, led_status_manager, audio_player)
             
-
-            stream.stop_buf()
-            log.debug("[Voice Assistant]: Stop listening.")
-            led_status_manager.update('LISTENING', LEDStatusManager.NO_DATA)
+            audio_player.beep() #signal start of listening to user
+            utterance = recognize_user_input(google_asr_client, google_streaming_config, led_status_manager, stream)
             
             audio_player.async_waiting_tone() #signal processing to user
+            run_voiceflow_interact_request(voiceflow_client, led_status_manager, utterance)
 
-
-            try:    
-                log.debug("[Voiceflow]: Requesting first voiceflow interaction.", voiceflow_user_id=voiceflow_client.user_id)
-                led_status_manager.update('VOICEFLOW_API', LEDStatusManager.RUNNING_REQUEST)
-                vf_response = voiceflow_client.interact.text(user_input=utterance)
-                #TODO: Check if response success -> if not, handle error
-                led_status_manager.update('VOICEFLOW_API', LEDStatusManager.SUCCESSFUL_REQUEST)
-            except Exception as e:
-                log.error("Error in voiceflow interaction", error=str(e))
-                led_status_manager.update('VOICEFLOW_API', LEDStatusManager.UNSUCCESSFUL_REQUEST)
-                return
-    
-            end = handle_vf_response(voiceflow_client, vf_response, elevenlabs_client, audio_player, led_status_manager)
-
-def wait_for_start_signal(led_status_manager):
-    #Busy wait is necessary as a simple way to continue polling WIFI status.
-    #TODO: Perhaps move to WIFI updating process.
-    while True:
-        led_status_manager.update_wifi_availability()
-        userText, timedOut = timedKey("Press any key to start the voice assistant", timeout=5)
-        if (not timedOut):
-            return
+            end, message = handle_vf_response(voiceflow_client, vf_response)
         
 def main():
     #Run setup for Dialogbench Loop
@@ -312,8 +202,6 @@ def main():
                 p.terminate()
                 log.debug("[Dialogbench]: Terminating process due to user interrupt.")
                 break
-
-#TODO: At exit also kill child processes
                 
 if __name__ == "__main__":
     main()

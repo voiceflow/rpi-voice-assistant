@@ -1,0 +1,13 @@
+2024-03-21 02:30:18 [debug    ] [Elevenlabs]: Initializing file system cache path=/home/tam/Documents/rpi-voice-assistant/cache
+2024-03-21 02:30:18 [debug    ] [Voice Assistant]: Starting voice assistant voiceflow_user_id=UUID('21a87af8-0e31-4c8f-b4cf-ab69a7a119d9')
+Press any key to start the voice assistant
+
+Press any key to start the voice assistant
+
+Press any key to start the voice assistant
+
+Press any key to start the voice assistant
+
+Press any key to start the voice assistant
+
+2024-03-21 02:30:44 [debug    ] [Audio]: Stopping AudioPlayer.
