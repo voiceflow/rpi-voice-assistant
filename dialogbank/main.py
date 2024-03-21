@@ -156,7 +156,7 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
             vf_response = run_voiceflow_interact_request(voiceflow_client, led_status_manager, utterance)
 
             end, message = handle_vf_response(voiceflow_client, vf_response)
-            log.debug(f"Voiceflow generated message", message)
+            log.debug("Voiceflow generated message", message=message)
         
 def main():
     #Run setup for Dialogbench Loop
