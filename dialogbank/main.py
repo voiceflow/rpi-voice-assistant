@@ -44,21 +44,25 @@ def generate_and_play_elevenlabs_audio(el: ElevenLabs, message: str, led_status_
 
 def handle_vf_response(vf: Voiceflow, vf_response: JSON) -> tuple[bool, str | None]:
     messages = []
+    end = False
     for item in vf_response:
         if item["type"] == "speak":
             message = item["payload"]["message"]
             log.debug("[Voiceflow]: Got response", response=message)
             messages.append(message)
         elif item["type"] == "end":
-            log.debug("[Voiceflow]: Got end of interaction.")
-            log.debug("[Voice Assistant]: =========END OF INTERACTION=========")
-            vf.user_state.delete()
-            return True, None 
-    if messages:
-        return False, ".".join(messages)
-    #Fallback: If no text message returned from Voiceflow, end interaction
-    log.error("[Voiceflow]: No speak or end type in response.")
-    return True, None
+            log.debug("[Voiceflow]: Got signal for end of interaction.")
+            end = True
+    log.debug("Voiceflow generated message", message=".".join(messages))
+    return end, ".".join(messages)
+
+def terminate_interaction(vf: Voiceflow, elevenlabs_client: ElevenLabs, led_status_manager: LEDStatusManager, audio_player: audio.AudioPlayer, message: str = None):
+    if message:
+        log.debug("[Voiceflow]: Got end response", response=message)
+        generate_and_play_elevenlabs_audio(elevenlabs_client, message, led_status_manager, audio_player)
+    log.debug("[Voice Assistant]: =========END OF INTERACTION=========")
+    vf.user_state.delete()
+
 
 def is_successful_vf_response(response: JSON) -> bool:
     for item in response:
@@ -156,7 +160,8 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
             vf_response = run_voiceflow_interact_request(voiceflow_client, led_status_manager, utterance)
 
             end, message = handle_vf_response(voiceflow_client, vf_response)
-            log.debug("Voiceflow generated message", message=message)
+
+        terminate_interaction(voiceflow_client, elevenlabs_client, led_status_manager, audio_player, message)
         
 def main():
     #Run setup for Dialogbench Loop
