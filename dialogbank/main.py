@@ -53,8 +53,9 @@ def handle_vf_response(vf: Voiceflow, vf_response: JSON) -> tuple[bool, str | No
         elif item["type"] == "end":
             log.debug("[Voiceflow]: Got signal for end of interaction.")
             end = True
-    log.debug("Voiceflow generated message", message=".".join(messages))
-    return end, ".".join(messages)
+    full_message = ' '.join(m.strip() for m in messages if m.strip())
+    log.debug("Voiceflow generated message", message=full_message)
+    return end, full_message
 
 def terminate_interaction(vf: Voiceflow, elevenlabs_client: ElevenLabs, led_status_manager: LEDStatusManager, audio_player: audio.AudioPlayer, message: str = None):
     if message:
