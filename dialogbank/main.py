@@ -42,7 +42,7 @@ def generate_and_play_elevenlabs_audio(el: ElevenLabs, message: str, led_status_
         sys.exit(1)
     led_status_manager.update('ELEVENLABS_API', LEDStatusManager.SUCCESSFUL_REQUEST)
 
-def handle_vf_response(vf: Voiceflow, vf_response: JSON) -> tuple[bool, str | None]:
+def unpack_vf_response(vf_response: JSON) -> tuple[bool, str | None]:
     messages = []
     end = False
     for item in vf_response:
@@ -138,9 +138,10 @@ def wait_for_start_signal(led_status_manager):
         if (not timedOut):
             return
 
-def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, elevenlabs_client: ElevenLabs, audio_player: audio.AudioPlayer, shared_status_list: shared_memory.ShareableList):
+def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.SpeechClient, google_streaming_config: speech.StreamingRecognitionConfig, elevenlabs_client: ElevenLabs, shared_status_list: shared_memory.ShareableList):
     led_status_manager = LEDStatusManager(shared_status_list)
     led_status_manager.update('APPLICATION', LEDStatusManager.CONVERSATION_RUNNING)
+    audio_player = audio.AudioPlayer()
 
     with audio.MicrophoneStream(RATE, CHUNK) as stream:
         # Each loop iteration represents one interaction of one user with the voice assistant
@@ -148,7 +149,7 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
 
         vf_response = run_voiceflow_launch_request(voiceflow_client, led_status_manager)
         
-        end, message = handle_vf_response(voiceflow_client, vf_response)
+        end, message = unpack_vf_response(vf_response)
 
         while not end:
             generate_and_play_elevenlabs_audio(elevenlabs_client, message, led_status_manager, audio_player)
@@ -159,7 +160,7 @@ def run_dialogbench(voiceflow_client: Voiceflow, google_asr_client: speech.Speec
             audio_player.async_waiting_tone() #signal processing to user
             vf_response = run_voiceflow_interact_request(voiceflow_client, led_status_manager, utterance)
 
-            end, message = handle_vf_response(voiceflow_client, vf_response)
+            end, message = unpack_vf_response(vf_response)
 
         terminate_interaction(voiceflow_client, elevenlabs_client, led_status_manager, audio_player, message)
         
@@ -190,16 +191,13 @@ def main():
             api_key=os.getenv('EL_API_KEY', "dummy_key"), 
             voice_id=os.getenv('EL_VOICE_ID', "dummy_key"))
 
-    audio_player = audio.AudioPlayer()
-
     while True:
         voiceflow_client.user_id = uuid.uuid4()
-        audio_player.stop()
         log.debug("[Voice Assistant]: Starting voice assistant", voiceflow_user_id=voiceflow_client.user_id)
         led_status_manager.update('APPLICATION', LEDStatusManager.READY)
 
         wait_for_start_signal(led_status_manager)
-        p = Process(target=run_dialogbench, args=(voiceflow_client, google_asr_client, google_streaming_config, elevenlabs_client, audio_player, led_status_manager.status))
+        p = Process(target=run_dialogbench, args=(voiceflow_client, google_asr_client, google_streaming_config, elevenlabs_client, led_status_manager.status))
         p.start()
         
         log.debug("[Dialogbench]: Running busy waiting loop to listen for interrupt signal.")
