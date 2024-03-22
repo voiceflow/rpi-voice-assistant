@@ -5,6 +5,7 @@ import re
 import timeit
 import requests
 import structlog
+import sys
 from collections.abc import Sequence, Iterator
 
 log = structlog.get_logger(__name__)
@@ -72,6 +73,9 @@ class ElevenLabs:
         log.debug(f"[Elevenlabs]: Generating audio", text=text)
         start = timeit.default_timer()
         response = requests.post(url, json=payload, headers=headers, params=query)
+        if response.status_code != 200:
+            log.error(f"[Elevenlabs]: Failed to generate audio", status_code=response.status_code, text=text)
+            raise Exception(f"Failed to generate audio, Elevenlabs Status Code: {response.status_code}")    
         end = timeit.default_timer()
         log.debug(f"[Elevenlabs]: Successfully generated audio", took=round(end - start, 2), text=text)
 

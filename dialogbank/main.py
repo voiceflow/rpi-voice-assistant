@@ -64,7 +64,6 @@ def terminate_interaction(vf: Voiceflow, elevenlabs_client: ElevenLabs, led_stat
     log.debug("[Voice Assistant]: =========END OF INTERACTION=========")
     vf.user_state.delete()
 
-
 def is_successful_vf_response(response: JSON) -> bool:
     for item in response:
         if "type" in item:
