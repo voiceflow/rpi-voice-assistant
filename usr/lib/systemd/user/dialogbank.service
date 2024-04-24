@@ -1,10 +1,13 @@
 [Unit]
 Description=Dialogbank
+After=graphical.target
 
 [Service]
-ExecStart=/usr/share/python/bin/dbank
+Environment="DISPLAY=:0"
+ExecStart=bash -c "DISPLAY=:0 xterm /usr/share/python/bin/dbank"
+User=tam
 Type=simple
 Restart=always
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
