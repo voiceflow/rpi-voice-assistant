@@ -19,8 +19,9 @@ setup(
         # package and not installing it explicitly causes problems when packaging for Debian
         # for some reason. I haven’t found out why exactly so far.
         "grpcio>=1.49.1,<2.0dev",
-        "blinkt>=0.1.2",
         "pytimedinput>=2.0.1",
+        "rpi-lgpio>=0.4",
+        "blinkt>=0.1.2",
     ],
     include_package_data=True,
     package_data={

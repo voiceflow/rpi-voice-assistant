@@ -1,13 +1,7 @@
 [Unit]
 Description=Dialogbank
-After=graphical.target
 
 [Service]
-Environment="DISPLAY=:0"
-ExecStart=bash -c "DISPLAY=:0 xterm /usr/share/python/bin/dbank"
-User=tam
+ExecStart=xterm -e "/usr/share/python/bin/dbank 2>&1 | tee  ~/dialogbank.log"
 Type=simple
 Restart=always
-
-[Install]
-WantedBy=graphical.target

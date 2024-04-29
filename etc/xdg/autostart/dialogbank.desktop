@@ -1,0 +1,4 @@
+[Desktop Entry]
+Name=Dialogbank
+Exec=systemctl --user start dialogbank.service
+Type=Application
