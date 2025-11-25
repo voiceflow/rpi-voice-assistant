@@ -1,3 +1,6 @@
+> [!CAUTION]
+> Update Nov 25, 2025: This repository has been archived and will not accept further changes.
+
 # rpi-voice-assistant
 A Raspberry Pi based voice assistant running logic on Voiceflow
 
